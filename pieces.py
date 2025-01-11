@@ -21,14 +21,14 @@ PIECE_TYPES = {
 # Possible orientations
 DIRECTIONS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
-# Vectors for each orientation: row increment, column increment
+# Vectors for each orientation: (row_increment, column_increment)
 DIRECTION_VECTORS = {
-    "N": (0, -1),
-    "NE": (1, -1),
-    "E": (1, 0),
-    "SE": (1, 1),
-    "S": (0, 1),
-    "SW": (-1, 1),
-    "W": (-1, 0),
-    "NW": (-1, -1)
+    "N": (-1, 0),   # Move up (decrease row)
+    "NE": (-1, 1),  # Move up and right
+    "E": (0, 1),    # Move right (increase column)
+    "SE": (1, 1),   # Move down and right
+    "S": (1, 0),    # Move down (increase row)
+    "SW": (1, -1),  # Move down and left
+    "W": (0, -1),   # Move left (decrease column)
+    "NW": (-1, -1)  # Move up and left
 }
