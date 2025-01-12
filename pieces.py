@@ -8,7 +8,12 @@ You could also define Piece classes if you prefer an OOP approach.
 # Board dimensions
 BOARD_SIZE = 9
 
-PIECE_COLORS = {"green": "green", "orange": "orange"}
+PIECE_COLORS = {
+    "#32CD32": "green",       # Lime Green
+    "#FFA500": "orange",      # Orange
+    "#4169E1": "royalblue",   # Royal Blue
+    "#DC143C": "crimson",     # Crimson
+}
 
 # Types and the maximum movement steps associated with them
 PIECE_TYPES = {

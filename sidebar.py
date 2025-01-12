@@ -54,6 +54,8 @@ class GameSidebar(QDockWidget):
         self.content = QWidget()
         self.main_layout = QVBoxLayout(self.content)
         self.main_layout.setSpacing(20)
+
+        # Turn indicator will be added here by update_turn_indicator
         
         # Add top player's captures
         self.setup_captured_pieces_section("top")
@@ -213,3 +215,21 @@ class GameSidebar(QDockWidget):
                     color: white;
                 """)
                 widget.setAlignment(Qt.AlignCenter)
+
+    def update_turn_indicator(self, current_player):
+        """
+        Update the turn indicator in the sidebar to display the current player's name and color.
+        :param current_player: The current player object.
+        """
+        # Create or update a label for turn indicator
+        if not hasattr(self, 'turn_indicator_label'):
+            self.turn_indicator_label = QLabel()
+            self.turn_indicator_label.setAlignment(Qt.AlignCenter)
+            self.turn_indicator_label.setStyleSheet("font-weight: bold; font-size: 16px;")
+            self.main_layout.insertWidget(0, self.turn_indicator_label)
+        self.turn_indicator_label.setText(f"It's {current_player.name}'s Turn!")
+        self.turn_indicator_label.setStyleSheet(f"""
+            font-weight: bold; 
+            font-size: 16px; 
+            color: {current_player.color};
+        """)

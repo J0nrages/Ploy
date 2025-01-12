@@ -17,6 +17,14 @@ class DebugLogger:
         self.log_file = log_file
         self.last_message = None  # Track last message to avoid duplicates
 
+    def log(self, message):
+        """
+        General-purpose logging method.
+
+        :param message: The message to log.
+        """
+        self.log_debug(message)
+
     def log_debug(self, message):
         """
         Log a debug message with a timestamp.
