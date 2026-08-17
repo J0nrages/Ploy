@@ -1,11 +1,15 @@
-import { Html, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import type { Color, Move, Piece, Snapshot, Square } from "@ploy/rules";
-import { toWorld } from "./catalog";
+import { ARMY, baseMask, projectedRoutes, toWorld } from "./catalog";
 import { Disc } from "./Disc";
 import type { ShieldStaging } from "./interaction";
 import { Starfield } from "./Starfield";
+
+type ControlsPlacement = "top" | "bottom";
+type RotationSteps = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+const CONTROLS_PLACEMENT_KEY = "ploy.boardControlsPlacement";
 
 export type BoardProps = {
   snapshot: Snapshot;
@@ -168,21 +172,108 @@ function MoveTargets({
   );
 }
 
+function OrientationProjection(props: {
+  snapshot: Snapshot;
+  origin: Square;
+  piece: Piece;
+  steps: RotationSteps;
+  vacatedSquare?: Square | undefined;
+}) {
+  const routes = useMemo(
+    () =>
+      projectedRoutes(
+        props.snapshot,
+        props.origin,
+        props.piece,
+        props.steps,
+        props.vacatedSquare,
+      ),
+    [props.snapshot, props.origin, props.piece, props.steps, props.vacatedSquare],
+  );
+  const originRank = Math.floor(props.origin / 9);
+  const originFile = props.origin % 9;
+  const [originX, , originZ] = toWorld(originRank, originFile);
+
+  return (
+    <group>
+      {routes.map((route) => {
+        const destination = route.squares.at(-1);
+        if (destination === undefined) {
+          return null;
+        }
+        const destinationRank = Math.floor(destination / 9);
+        const destinationFile = destination % 9;
+        const [destinationX, , destinationZ] = toWorld(
+          destinationRank,
+          destinationFile,
+        );
+        return (
+          <group key={`projection-${route.direction}`}>
+            <line>
+              <bufferGeometry>
+                <bufferAttribute
+                  attach="attributes-position"
+                  args={[
+                    new Float32Array([
+                      originX,
+                      0.24,
+                      originZ,
+                      destinationX,
+                      0.24,
+                      destinationZ,
+                    ]),
+                    3,
+                  ]}
+                />
+              </bufferGeometry>
+              <lineBasicMaterial
+                color="#4cc9f0"
+                transparent
+                opacity={0.72}
+              />
+            </line>
+            {route.squares.map((square) => {
+              const rank = Math.floor(square / 9);
+              const file = square % 9;
+              const [x, , z] = toWorld(rank, file);
+              return (
+                <mesh
+                  key={`projection-point-${square}`}
+                  position={[x, 0.2, z]}
+                  rotation={[-Math.PI / 2, 0, 0]}
+                >
+                  <ringGeometry args={[0.11, 0.18, 24]} />
+                  <meshStandardMaterial
+                    color="#b8f2ff"
+                    emissive="#4cc9f0"
+                    emissiveIntensity={1.25}
+                    transparent
+                    opacity={0.95}
+                  />
+                </mesh>
+              );
+            })}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function PieceControls(props: {
   piece: Piece;
-  square: Square;
   legal: Move[];
   staging: ShieldStaging | null;
   invalidAttempt: number;
-  onCommitRotation: (steps: 1 | 2 | 3 | 4 | 5 | 6 | 7) => void;
-  onCommitStaging: (postMoveSteps?: 1 | 2 | 3 | 4 | 5 | 6 | 7) => void;
-  onPreviewRotation: (steps: 1 | 2 | 3 | 4 | 5 | 6 | 7 | null) => void;
+  placement: ControlsPlacement;
+  previewRotationSteps: RotationSteps | null;
+  projectedMoveCount: number | null;
+  onPlacementChange: (placement: ControlsPlacement) => void;
+  onCommitRotation: (steps: RotationSteps) => void;
+  onCommitStaging: (postMoveSteps?: RotationSteps) => void;
+  onPreviewRotation: (steps: RotationSteps | null) => void;
   onCancel: () => void;
 }) {
-  const rank = Math.floor(props.square / 9);
-  const file = props.square % 9;
-  const [x, , z] = toWorld(rank, file);
-  const controlX = x + (file >= 4 ? -2.3 : 2.3);
   const rotationSteps = props.legal.flatMap((move) =>
     move.type === "rotate" ? [move.steps] : [],
   );
@@ -193,12 +284,8 @@ function PieceControls(props: {
     ) ?? [];
 
   return (
-    <Html position={[controlX, 0.68, z]} center zIndexRange={[100, 0]}>
-      <div
-        className="piece-controls"
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-      >
+    <section className={`piece-controls piece-controls-${props.placement}`} aria-label="Piece actions">
+      <div className="piece-controls-copy">
         <div className="piece-controls-heading">
           <strong>{pieceName(props.piece)}</strong>
           <button type="button" aria-label="Close piece controls" onClick={props.onCancel}>
@@ -209,59 +296,112 @@ function PieceControls(props: {
           <p className="piece-control-error">That piece cannot move there. Choose a gold point.</p>
         ) : null}
         {props.staging ? (
-          <>
-            <p>
-              Move selected. Finish this turn by keeping the facing or rotating the Shield.
-            </p>
-            <div className="piece-control-actions">
-              <button type="button" className="primary" onClick={() => props.onCommitStaging()}>
-                Keep facing
-              </button>
-              {stagedSteps.map((steps) => (
-                <button
-                  type="button"
-                  key={steps}
-                  onPointerEnter={() => props.onPreviewRotation(steps)}
-                  onPointerLeave={() => props.onPreviewRotation(null)}
-                  onFocus={() => props.onPreviewRotation(steps)}
-                  onBlur={() => props.onPreviewRotation(null)}
-                  onClick={() => props.onCommitStaging(steps)}
-                >
-                  {rotationLabel(props.piece, steps)}
-                </button>
-              ))}
-            </div>
-          </>
+          <p>Move selected. Keep the current facing or choose the resulting ray pattern.</p>
         ) : (
-          <>
-            <p>
-              {props.piece.kind === "shield"
-                ? "Move to a gold point, then optionally rotate. Or rotate here without moving."
-                : hasMotion
-                  ? "Choose one action: move to a gold point OR rotate here."
-                  : "This piece cannot move from here. You can rotate it in place."}
-            </p>
-            {rotationSteps.length > 0 ? (
-              <div className="piece-control-actions">
-                {rotationSteps.map((steps) => (
-                  <button
-                    type="button"
-                    key={steps}
-                    onPointerEnter={() => props.onPreviewRotation(steps)}
-                    onPointerLeave={() => props.onPreviewRotation(null)}
-                    onFocus={() => props.onPreviewRotation(steps)}
-                    onBlur={() => props.onPreviewRotation(null)}
-                    onClick={() => props.onCommitRotation(steps)}
-                  >
-                    {rotationLabel(props.piece, steps)}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </>
+          <p>
+            {props.piece.kind === "shield"
+              ? "Move to a gold point and optionally rotate, or rotate here without moving."
+              : hasMotion
+                ? "Choose one action: move to a gold point OR rotate here."
+                : "This piece cannot move from here. You can rotate it in place."}
+          </p>
         )}
+        <p className={props.previewRotationSteps ? "orientation-guidance is-previewing" : "orientation-guidance"}>
+          {props.previewRotationSteps
+            ? props.projectedMoveCount === 0
+              ? "No projected move in this facing: its lane is blocked or points off the board."
+              : "Blue points are projected next-turn moves if the board stays unchanged."
+            : "Hover or focus a rotation to preview its next-turn movement lanes."}
+        </p>
       </div>
-    </Html>
+      <div className="piece-control-actions">
+        {props.staging ? (
+          <button
+            type="button"
+            className="orientation-choice keep-facing"
+            onPointerEnter={() => props.onPreviewRotation(null)}
+            onFocus={() => props.onPreviewRotation(null)}
+            onClick={() => props.onCommitStaging()}
+          >
+            <OrientationPreview piece={props.piece} steps={0} />
+            <span>
+              <strong>Keep facing</strong>
+              <small>Current rays</small>
+            </span>
+          </button>
+        ) : null}
+        {(props.staging ? stagedSteps : rotationSteps).map((steps) => (
+          <button
+            type="button"
+            className="orientation-choice"
+            key={steps}
+            aria-label={rotationAriaLabel(props.piece, steps)}
+            onPointerEnter={() => props.onPreviewRotation(steps)}
+            onPointerLeave={() => props.onPreviewRotation(null)}
+            onFocus={() => props.onPreviewRotation(steps)}
+            onBlur={() => props.onPreviewRotation(null)}
+            onClick={() =>
+              props.staging
+                ? props.onCommitStaging(steps)
+                : props.onCommitRotation(steps)
+            }
+          >
+            <OrientationPreview piece={props.piece} steps={steps} />
+            <span>
+              <strong>{rotationPrimaryLabel(props.piece, steps)}</strong>
+              <small>+{steps * 45}°</small>
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="controls-placement" aria-label="Action controls position">
+        <span>Panel</span>
+        <button
+          type="button"
+          className={props.placement === "top" ? "is-selected" : ""}
+          aria-pressed={props.placement === "top"}
+          onClick={() => props.onPlacementChange("top")}
+        >
+          Top
+        </button>
+        <button
+          type="button"
+          className={props.placement === "bottom" ? "is-selected" : ""}
+          aria-pressed={props.placement === "bottom"}
+          onClick={() => props.onPlacementChange("bottom")}
+        >
+          Bottom
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function OrientationPreview(props: { piece: Piece; steps: 0 | RotationSteps }) {
+  const rotation = (props.piece.rot + props.steps) % 8;
+  const base = baseMask(props.piece);
+  const mask = ((base << rotation) | (base >> (8 - rotation))) & 0xff;
+  const color = ARMY[props.piece.color] ?? "#ffffff";
+
+  return (
+    <svg className="orientation-preview" viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="17" fill={color} stroke="rgba(255,255,255,.5)" strokeWidth="1.5" />
+      {Array.from({ length: 8 }, (_, direction) => {
+        if ((mask & (1 << direction)) === 0) {
+          return null;
+        }
+        const angle = (direction * Math.PI) / 4;
+        const x = 20 + Math.sin(angle) * 13;
+        const y = 20 - Math.cos(angle) * 13;
+        return (
+          <g key={direction}>
+            <line x1="20" y1="20" x2={x} y2={y} stroke="#170d25" strokeWidth="5" strokeLinecap="round" />
+            <line x1="20" y1="20" x2={x} y2={y} stroke="#fff8e7" strokeWidth="2" strokeLinecap="round" />
+          </g>
+        );
+      })}
+      <circle cx="20" cy="20" r="2.25" fill="#170d25" />
+    </svg>
   );
 }
 
@@ -279,6 +419,8 @@ export function PloyBoard({
   const [previewRotationSteps, setPreviewRotationSteps] = useState<
     1 | 2 | 3 | 4 | 5 | 6 | 7 | null
   >(null);
+  const [controlsPlacement, setControlsPlacement] =
+    useState<ControlsPlacement>(loadControlsPlacement);
 
   useEffect(() => {
     setPreviewRotationSteps(null);
@@ -302,9 +444,47 @@ export function PloyBoard({
     sourceSquare === null
       ? null
       : snapshot.board[Math.floor(sourceSquare / 9)]?.[sourceSquare % 9] ?? null;
+  const projectedMoveCount =
+    previewRotationSteps && actionSquare !== null && actionPiece
+      ? projectedRoutes(
+          snapshot,
+          actionSquare,
+          actionPiece,
+          previewRotationSteps,
+          staging?.from,
+        ).reduce((total, route) => total + route.squares.length, 0)
+      : null;
+  const changeControlsPlacement = (placement: ControlsPlacement): void => {
+    setControlsPlacement(placement);
+    try {
+      window.localStorage.setItem(CONTROLS_PLACEMENT_KEY, placement);
+    } catch {
+      // The in-memory preference still works when browser storage is unavailable.
+    }
+  };
+
+  const controls = actionPiece ? (
+    <PieceControls
+      piece={actionPiece}
+      legal={legal}
+      staging={staging}
+      invalidAttempt={invalidAttempt}
+      placement={controlsPlacement}
+      previewRotationSteps={previewRotationSteps}
+      projectedMoveCount={projectedMoveCount}
+      onPlacementChange={changeControlsPlacement}
+      onCommitRotation={onCommitRotation}
+      onCommitStaging={onCommitStaging}
+      onPreviewRotation={setPreviewRotationSteps}
+      onCancel={onCancel}
+    />
+  ) : null;
 
   return (
-    <Canvas camera={{ position: [0, 12.5, 12.5], fov: 38 }} style={{ width: "100%", height: "100%" }}>
+    <div className={`board-shell controls-${controlsPlacement}`}>
+      {controlsPlacement === "top" ? controls : null}
+      <div className="board-canvas">
+        <Canvas camera={{ position: [0, 12.5, 12.5], fov: 38 }}>
       <color attach="background" args={["#070314"]} />
       <fog attach="fog" args={["#070314", 22, 55]} />
       <Starfield />
@@ -318,6 +498,15 @@ export function PloyBoard({
       <PathNetwork targets={targets} onSelectSquare={onSelectSquare} />
       <LegalRays legal={legal} selected={selected} />
       {staging ? null : <MoveTargets legal={legal} onSelectSquare={onSelectSquare} />}
+      {previewRotationSteps && actionSquare !== null && actionPiece ? (
+        <OrientationProjection
+          snapshot={snapshot}
+          origin={actionSquare}
+          piece={actionPiece}
+          steps={previewRotationSteps}
+          vacatedSquare={staging?.from}
+        />
+      ) : null}
       {snapshot.board.flatMap((row, rank) =>
         row.flatMap((piece, file) => {
           if (!piece) {
@@ -343,19 +532,6 @@ export function PloyBoard({
           ];
         }),
       )}
-      {actionSquare !== null && actionPiece ? (
-        <PieceControls
-          piece={actionPiece}
-          square={actionSquare}
-          legal={legal}
-          staging={staging}
-          invalidAttempt={invalidAttempt}
-          onCommitRotation={onCommitRotation}
-          onCommitStaging={onCommitStaging}
-          onPreviewRotation={setPreviewRotationSteps}
-          onCancel={onCancel}
-        />
-      ) : null}
       <OrbitControls
         enablePan={false}
         minDistance={9}
@@ -363,7 +539,10 @@ export function PloyBoard({
         minPolarAngle={Math.PI / 6}
         maxPolarAngle={Math.PI / 2.2}
       />
-    </Canvas>
+        </Canvas>
+      </div>
+      {controlsPlacement === "bottom" ? controls : null}
+    </div>
   );
 }
 
@@ -382,11 +561,31 @@ const DIRECTION_NAMES = [
   "Northwest",
 ] as const;
 
-function rotationLabel(piece: Piece, steps: 1 | 2 | 3 | 4 | 5 | 6 | 7): string {
+function rotationPrimaryLabel(piece: Piece, steps: RotationSteps): string {
+  if (piece.kind === "shield") {
+    return DIRECTION_NAMES[(piece.rot + steps) % 8] ?? "Rotate";
+  }
+  return "Rotate";
+}
+
+function rotationAriaLabel(piece: Piece, steps: RotationSteps): string {
   const degrees = steps * 45;
   if (piece.kind === "shield") {
-    const direction = DIRECTION_NAMES[(piece.rot + steps) % 8];
-    return `${direction} · ${degrees}°`;
+    const direction = DIRECTION_NAMES[(piece.rot + steps) % 8] ?? "new direction";
+    return `Rotate to ${direction}, ${degrees} degrees clockwise`;
   }
-  return `↻ ${degrees}°`;
+  return `Rotate ${degrees} degrees clockwise to the shown ray pattern`;
+}
+
+function loadControlsPlacement(): ControlsPlacement {
+  try {
+    if (typeof window === "undefined") {
+      return "bottom";
+    }
+    return window.localStorage.getItem(CONTROLS_PLACEMENT_KEY) === "top"
+      ? "top"
+      : "bottom";
+  } catch {
+    return "bottom";
+  }
 }

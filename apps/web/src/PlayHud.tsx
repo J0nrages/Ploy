@@ -94,7 +94,7 @@ export function PlayHud(props: {
               Cancel move
             </button>
           </div>
-          <p className="hint">Use the controls attached to the Shield to finish the move.</p>
+          <p className="hint">Use the orientation tray above or below the board to finish the move.</p>
         </div>
       ) : (
         <div className="turn-actions">
@@ -121,7 +121,7 @@ export function PlayHud(props: {
             ) : null}
           </div>
           {selectedPiece ? (
-            <p className="hint">Move and rotation controls are attached to the selected piece.</p>
+            <p className="hint">Move and rotation choices are in the tray above or below the board.</p>
           ) : null}
         </div>
       )}

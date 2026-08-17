@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { directionYaw, fileRank, squareAfterArrow } from "./catalog";
+import {
+  directionYaw,
+  fileRank,
+  projectedRoutes,
+  squareAfterArrow,
+} from "./catalog";
 import { motionWithoutRotation, shouldStageShield } from "./interaction";
 import { createGame, initializeRules, legalMoves, type Move, type Piece } from "@ploy/rules";
 
@@ -64,6 +69,25 @@ test("rendered rays point toward authoritative legal destinations", async () => 
 
 test("fileRank maps e3", () => {
   expect(fileRank(22)).toBe("e3");
+});
+
+test("rotation projections show the resulting movement lanes at piece range", async () => {
+  await initializeRules();
+  const snapshot = createGame("twoPlayer");
+  const lance = snapshot.board
+    .flat()
+    .find((piece): piece is Extract<Piece, { kind: "lance" }> => piece?.kind === "lance");
+  if (!lance) {
+    throw new Error("Opening position is missing a Lance");
+  }
+  const board = snapshot.board.map((row, rank) =>
+    row.map((_, file) => (rank === 4 && file === 4 ? lance : null)),
+  );
+  const isolated = { ...snapshot, board };
+  const routes = projectedRoutes(isolated, 40, lance, 1);
+
+  expect(routes).toHaveLength(3);
+  expect(routes.every((route) => route.squares.length === 3)).toBe(true);
 });
 
 test("arrow keys stay on the 9x9 graph", () => {

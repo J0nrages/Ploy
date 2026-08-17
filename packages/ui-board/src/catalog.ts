@@ -1,4 +1,4 @@
-import type { Piece } from "@ploy/rules";
+import type { Piece, Snapshot, Square } from "@ploy/rules";
 
 export const FILE_LABELS = ["a", "b", "c", "d", "e", "f", "g", "h", "i"] as const;
 
@@ -38,6 +38,81 @@ export function effectiveMask(piece: Piece): number {
   const rot = piece.rot % 8;
   const base = baseMask(piece);
   return ((base << rot) | (base >> (8 - rot))) & 0xff;
+}
+
+export type ProjectedRoute = {
+  direction: number;
+  squares: Square[];
+};
+
+const DIRECTION_DELTAS = [
+  [1, 0],
+  [1, 1],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+] as const;
+
+export function projectedRoutes(
+  snapshot: Snapshot,
+  origin: Square,
+  piece: Piece,
+  steps: number,
+  vacatedSquare?: Square,
+): ProjectedRoute[] {
+  const rotation = (piece.rot + steps) % 8;
+  const base = baseMask(piece);
+  const mask = ((base << rotation) | (base >> (8 - rotation))) & 0xff;
+  const originRank = Math.floor(origin / 9);
+  const originFile = origin % 9;
+  const distance =
+    piece.kind === "commander" || piece.kind === "shield"
+      ? 1
+      : piece.kind === "probe"
+        ? 2
+        : 3;
+
+  return DIRECTION_DELTAS.flatMap(([rankDelta, fileDelta], direction) => {
+    if ((mask & (1 << direction)) === 0) {
+      return [];
+    }
+    const squares: Square[] = [];
+    for (let step = 1; step <= distance; step += 1) {
+      const rank = originRank + rankDelta * step;
+      const file = originFile + fileDelta * step;
+      if (rank < 0 || rank > 8 || file < 0 || file > 8) {
+        break;
+      }
+      const square = rank * 9 + file;
+      const occupant =
+        square === vacatedSquare ? null : snapshot.board[rank]?.[file] ?? null;
+      if (!occupant) {
+        squares.push(square);
+        continue;
+      }
+      if (!isFriendly(snapshot, piece, occupant)) {
+        squares.push(square);
+      }
+      break;
+    }
+    return squares.length > 0 ? [{ direction, squares }] : [];
+  });
+}
+
+function isFriendly(snapshot: Snapshot, piece: Piece, other: Piece): boolean {
+  if (snapshot.mode !== "partnership") {
+    return other.controller === piece.controller;
+  }
+  return team(piece.controller) === team(other.color);
+}
+
+function team(color: Piece["color"]): "green-yellow" | "coral-blue" {
+  return color === "green" || color === "yellow"
+    ? "green-yellow"
+    : "coral-blue";
 }
 
 export function fileRank(square: number): string {
