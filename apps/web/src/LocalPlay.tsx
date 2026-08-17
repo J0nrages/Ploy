@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   applyMove,
   controllerForTurn,
@@ -19,6 +19,7 @@ import {
   type LocalGameSave,
   type LocalPlayKind,
 } from "./localGame";
+import { buildMoveTimeline } from "./moveTimeline";
 import { PlayHud } from "./PlayHud";
 import { RulesHelp } from "./RulesHelp";
 import { snapshotTurnKey, type ComputerMoveOperation } from "./computerTurn";
@@ -126,6 +127,7 @@ export function LocalPlay(props: { onBack: () => void }) {
   });
 
   const legalCount = interaction.legal.length;
+  const timeline = useMemo(() => buildMoveTimeline(history, snapshot), [history, snapshot]);
 
   const start = (): void => {
     const nextPlayKind = mode === "twoPlayer" ? playKind : "hotseat";
@@ -347,6 +349,7 @@ export function LocalPlay(props: { onBack: () => void }) {
         onCancelThink={computer.cancel}
         onRetryThink={computer.retry}
         onCancel={interaction.cancel}
+        timeline={timeline}
       >
         <nav className="game-nav" aria-label="Game">
           <button

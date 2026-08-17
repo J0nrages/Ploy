@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { Color, Move, Snapshot, Winner } from "@ploy/rules";
 import { fileRank, pieceAt, type ShieldStaging } from "@ploy/ui-board";
 import type { ComputerTurnStatus } from "./computerTurn";
+import type { TimelineEntry } from "./moveTimeline";
 
 function formatWinner(winner: NonNullable<Winner>): string {
   return winner.type === "color" ? colorName(winner.color) : winner.team;
@@ -40,6 +41,7 @@ export function PlayHud(props: {
   onCancelThink?: () => void;
   onRetryThink?: () => void;
   onCancel: () => void;
+  timeline?: TimelineEntry[];
   children?: ReactNode;
 }) {
   const selectedSquare =
@@ -53,10 +55,13 @@ export function PlayHud(props: {
   const hasMotion = props.selectedMoves.some((move) => move.type === "motion");
   const hasRotation = props.selectedMoves.some((move) => move.type === "rotate");
 
+  const timeline = props.timeline ?? [];
+
   return (
     <aside className="hud">
-      {props.children}
-      <p className="status" role="status">{turnStatus(props.snapshot, props.acting)}</p>
+      <div className="hud-chrome">
+        {props.children}
+        <p className="status" role="status">{turnStatus(props.snapshot, props.acting)}</p>
       {props.computerStatus === "thinking" ? (
         <p className="thinking">
           Computer is thinking…
@@ -125,6 +130,18 @@ export function PlayHud(props: {
           ) : null}
         </div>
       )}
+      </div>
+      {timeline.length > 0 ? (
+        <ol className="move-timeline" aria-label="Completed moves">
+          {timeline.map((entry) => (
+            <li key={entry.ply} className={`move-event move-${entry.color}`}>
+              <span className="move-ply">{entry.ply}</span>
+              <span className={`color-dot ${entry.color}`} aria-hidden="true" />
+              <span className="move-copy">{entry.summary}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </aside>
   );
 }
