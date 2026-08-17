@@ -101,7 +101,7 @@ export function buildMoveTimeline(history: Snapshot[], current: Snapshot): Timel
       entries.push(entry);
     }
   }
-  return entries.reverse();
+  return entries;
 }
 
 function rotationSteps(from: Piece["rot"], to: Piece["rot"]): number {

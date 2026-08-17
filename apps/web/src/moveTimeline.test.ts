@@ -33,7 +33,7 @@ test("timeline describes an in-place rotation", async () => {
   expect(entry?.summary).toMatch(/rotates \+\d+° at [a-i][1-9]|faces /);
 });
 
-test("timeline lists newest completed ply first", async () => {
+test("timeline lists oldest completed ply first", async () => {
   await initializeRules();
   const start = createGame("twoPlayer");
   const afterGreen = applyMove(start, SPIKE_MOVE, "green");
@@ -47,8 +47,8 @@ test("timeline lists newest completed ply first", async () => {
   const timeline = buildMoveTimeline([start, afterGreen], afterCoral);
 
   expect(timeline).toHaveLength(2);
-  expect(timeline[0]?.ply).toBe(2);
-  expect(timeline[0]?.color).toBe("coral");
-  expect(timeline[1]?.ply).toBe(1);
-  expect(timeline[1]?.summary).toBe("Shield e3 → e4");
+  expect(timeline[0]?.ply).toBe(1);
+  expect(timeline[0]?.summary).toBe("Shield e3 → e4");
+  expect(timeline[1]?.ply).toBe(2);
+  expect(timeline[1]?.color).toBe("coral");
 });
