@@ -7,7 +7,7 @@ import { Disc } from "./Disc";
 import type { ShieldStaging } from "./interaction";
 import { Starfield } from "./Starfield";
 
-type ControlsPlacement = "top" | "bottom";
+export type ControlsPlacement = "top" | "bottom";
 type RotationSteps = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 const CONTROLS_PLACEMENT_KEY = "ploy.boardControlsPlacement";
 
@@ -18,6 +18,9 @@ export type BoardProps = {
   staging?: ShieldStaging | null;
   invalidAttempt?: number;
   actingColor: Color | null;
+  controlsPlacement?: ControlsPlacement;
+  onControlsPlacementChange?: (placement: ControlsPlacement) => void;
+  showPlacementControls?: boolean;
   onSelectSquare: (square: Square) => void;
   onCommitRotation: (steps: 1 | 2 | 3 | 4 | 5 | 6 | 7) => void;
   onCommitStaging: (postMoveSteps?: 1 | 2 | 3 | 4 | 5 | 6 | 7) => void;
@@ -266,6 +269,7 @@ function PieceControls(props: {
   staging: ShieldStaging | null;
   invalidAttempt: number;
   placement: ControlsPlacement;
+  showPlacementControls: boolean;
   previewRotationSteps: RotationSteps | null;
   projectedMoveCount: number | null;
   onPlacementChange: (placement: ControlsPlacement) => void;
@@ -354,25 +358,27 @@ function PieceControls(props: {
           </button>
         ))}
       </div>
-      <div className="controls-placement" aria-label="Action controls position">
-        <span>Panel</span>
-        <button
-          type="button"
-          className={props.placement === "top" ? "is-selected" : ""}
-          aria-pressed={props.placement === "top"}
-          onClick={() => props.onPlacementChange("top")}
-        >
-          Top
-        </button>
-        <button
-          type="button"
-          className={props.placement === "bottom" ? "is-selected" : ""}
-          aria-pressed={props.placement === "bottom"}
-          onClick={() => props.onPlacementChange("bottom")}
-        >
-          Bottom
-        </button>
-      </div>
+      {props.showPlacementControls ? (
+        <div className="controls-placement" aria-label="Action controls position">
+          <span>Panel</span>
+          <button
+            type="button"
+            className={props.placement === "top" ? "is-selected" : ""}
+            aria-pressed={props.placement === "top"}
+            onClick={() => props.onPlacementChange("top")}
+          >
+            Top
+          </button>
+          <button
+            type="button"
+            className={props.placement === "bottom" ? "is-selected" : ""}
+            aria-pressed={props.placement === "bottom"}
+            onClick={() => props.onPlacementChange("bottom")}
+          >
+            Bottom
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -456,6 +462,9 @@ export function PloyBoard({
   staging = null,
   invalidAttempt = 0,
   actingColor,
+  controlsPlacement: controlledControlsPlacement,
+  onControlsPlacementChange,
+  showPlacementControls = true,
   onSelectSquare,
   onCommitRotation,
   onCommitStaging,
@@ -464,8 +473,10 @@ export function PloyBoard({
   const [previewRotationSteps, setPreviewRotationSteps] = useState<
     1 | 2 | 3 | 4 | 5 | 6 | 7 | null
   >(null);
-  const [controlsPlacement, setControlsPlacement] =
+  const [storedControlsPlacement, setStoredControlsPlacement] =
     useState<ControlsPlacement>(loadControlsPlacement);
+  const controlsPlacement =
+    controlledControlsPlacement ?? storedControlsPlacement;
 
   useEffect(() => {
     setPreviewRotationSteps(null);
@@ -502,12 +513,9 @@ export function PloyBoard({
         ).reduce((total, route) => total + route.squares.length, 0)
       : null;
   const changeControlsPlacement = (placement: ControlsPlacement): void => {
-    setControlsPlacement(placement);
-    try {
-      window.localStorage.setItem(CONTROLS_PLACEMENT_KEY, placement);
-    } catch {
-      // The in-memory preference still works when browser storage is unavailable.
-    }
+    setStoredControlsPlacement(placement);
+    storeControlsPlacement(placement);
+    onControlsPlacementChange?.(placement);
   };
 
   const controls = actionPiece ? (
@@ -517,6 +525,7 @@ export function PloyBoard({
       staging={staging}
       invalidAttempt={invalidAttempt}
       placement={controlsPlacement}
+      showPlacementControls={showPlacementControls}
       previewRotationSteps={previewRotationSteps}
       projectedMoveCount={projectedMoveCount}
       onPlacementChange={changeControlsPlacement}
@@ -626,7 +635,7 @@ function rotationAriaLabel(piece: Piece, steps: RotationSteps): string {
   return `Rotate ${degrees} degrees clockwise to the shown ray pattern`;
 }
 
-function loadControlsPlacement(): ControlsPlacement {
+export function loadControlsPlacement(): ControlsPlacement {
   try {
     if (typeof window === "undefined") {
       return "bottom";
@@ -636,5 +645,13 @@ function loadControlsPlacement(): ControlsPlacement {
       : "bottom";
   } catch {
     return "bottom";
+  }
+}
+
+export function storeControlsPlacement(placement: ControlsPlacement): void {
+  try {
+    window.localStorage.setItem(CONTROLS_PLACEMENT_KEY, placement);
+  } catch {
+    // The in-memory preference still works when browser storage is unavailable.
   }
 }

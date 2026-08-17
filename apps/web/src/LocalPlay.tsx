@@ -9,7 +9,13 @@ import {
   type Snapshot,
 } from "@ploy/rules";
 import { type Difficulty } from "@ploy/ai";
-import { PloyBoard, useBoardInteraction } from "@ploy/ui-board";
+import {
+  PloyBoard,
+  loadControlsPlacement,
+  storeControlsPlacement,
+  useBoardInteraction,
+  type ControlsPlacement,
+} from "@ploy/ui-board";
 import {
   createLocalGameId,
   deleteLocalGame,
@@ -32,6 +38,8 @@ export function LocalPlay(props: { onBack: () => void }) {
   const latestGame = savedGames[0] ?? null;
   const [view, setView] = useState<LocalView>("setup");
   const [showRules, setShowRules] = useState(false);
+  const [controlsPlacement, setControlsPlacement] =
+    useState<ControlsPlacement>(loadControlsPlacement);
   const [currentGameId, setCurrentGameId] = useState<string | null>(latestGame?.id ?? null);
   const [currentGameCreatedAt, setCurrentGameCreatedAt] = useState(
     latestGame?.createdAt ?? Date.now(),
@@ -128,6 +136,11 @@ export function LocalPlay(props: { onBack: () => void }) {
 
   const legalCount = interaction.legal.length;
   const timeline = useMemo(() => buildMoveTimeline(history, snapshot), [history, snapshot]);
+  const toggleControlsPlacement = (): void => {
+    const placement = controlsPlacement === "bottom" ? "top" : "bottom";
+    setControlsPlacement(placement);
+    storeControlsPlacement(placement);
+  };
 
   const start = (): void => {
     const nextPlayKind = mode === "twoPlayer" ? playKind : "hotseat";
@@ -195,7 +208,12 @@ export function LocalPlay(props: { onBack: () => void }) {
               </div>
               <span className="save-count">{savedGames.length}</span>
             </div>
-            <div className="saved-game-list">
+            <div
+              className="saved-game-list"
+              role="region"
+              aria-label="Saved games"
+              tabIndex={0}
+            >
               {savedGames.map((game) => (
                 <article className="saved-game" key={game.id}>
                   <div className="saved-game-summary">
@@ -363,9 +381,20 @@ export function LocalPlay(props: { onBack: () => void }) {
           >
             ← Game menu
           </button>
-          <button type="button" onClick={() => setShowRules((visible) => !visible)}>
-            {showRules ? "Hide rules" : "Rules"}
-          </button>
+          <div className="game-nav-actions">
+            <button
+              type="button"
+              className="board-placement-toggle"
+              aria-label={`Move piece controls to ${controlsPlacement === "bottom" ? "top" : "bottom"}`}
+              title={`Move piece controls to ${controlsPlacement === "bottom" ? "top" : "bottom"}`}
+              onClick={toggleControlsPlacement}
+            >
+              <PanelPlacementIcon placement={controlsPlacement} />
+            </button>
+            <button type="button" onClick={() => setShowRules((visible) => !visible)}>
+              {showRules ? "Hide rules" : "Rules"}
+            </button>
+          </div>
         </nav>
         <p className="eyebrow">Local game</p>
         <h1>{modeName(snapshot.mode)}</h1>
@@ -385,6 +414,9 @@ export function LocalPlay(props: { onBack: () => void }) {
           staging={interaction.staging}
           invalidAttempt={interaction.invalidAttempt}
           actingColor={acting}
+          controlsPlacement={controlsPlacement}
+          onControlsPlacementChange={setControlsPlacement}
+          showPlacementControls={false}
           onSelectSquare={interaction.onSelectSquare}
           onCommitRotation={interaction.commitRotation}
           onCommitStaging={interaction.commitStaging}
@@ -472,4 +504,14 @@ function difficultyName(difficulty: Difficulty): string {
     return "Commander";
   }
   return "Strategist";
+}
+
+function PanelPlacementIcon(props: { placement: ControlsPlacement }) {
+  const moveToTop = props.placement === "bottom";
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d={moveToTop ? "M12 18V7m0 0-4 4m4-4 4 4" : "M12 6v11m0 0-4-4m4 4 4-4"} />
+      <path d={moveToTop ? "M4 20h16" : "M4 4h16"} />
+    </svg>
+  );
 }

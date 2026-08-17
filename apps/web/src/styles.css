@@ -167,15 +167,30 @@ input:focus-visible {
 }
 
 .hud.menu {
-  width: min(100%, 48rem);
-  margin: 0 auto;
+  --menu-content-width: 48rem;
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, var(--menu-content-width))
+    minmax(0, 1fr);
+  align-content: start;
+  width: 100%;
+  min-height: 100dvh;
+  margin: 0;
+  padding-inline: clamp(1rem, 3vw, 2rem);
+  background:
+    radial-gradient(circle at 75% 15%, rgba(76, 201, 240, 0.08), transparent 28rem),
+    linear-gradient(135deg, rgba(45, 22, 72, 0.98), rgba(16, 8, 28, 0.96));
   border-right: none;
-  min-height: 100%;
+}
+
+.hud.menu > * {
+  grid-column: 2;
 }
 
 .local-menu {
-  width: min(100%, 62rem);
-  padding-bottom: 4rem;
+  --menu-content-width: 62rem;
+  padding-bottom: clamp(1rem, 2vh, 2rem);
 }
 
 .eyebrow {
@@ -299,6 +314,10 @@ button.status[aria-expanded="true"] {
 }
 
 .resume-card {
+  display: flex;
+  max-height: clamp(16rem, 34dvh, 22rem);
+  flex-direction: column;
+  overflow: hidden;
   border-color: rgba(76, 201, 240, 0.6);
 }
 
@@ -316,6 +335,30 @@ button.status[aria-expanded="true"] {
 .saved-game-list {
   display: grid;
   gap: 0.65rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: 0.1rem 0.2rem 0.45rem 0;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  touch-action: pan-y;
+  mask-image: linear-gradient(
+    180deg,
+    #000 0,
+    #000 calc(100% - 1.25rem),
+    transparent 100%
+  );
+}
+
+.saved-game-list::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.saved-game-list:focus-visible {
+  outline: 3px solid rgba(76, 201, 240, 0.55);
+  outline-offset: 0.2rem;
 }
 
 .saved-game {
@@ -364,6 +407,30 @@ button.status[aria-expanded="true"] {
 .game-nav {
   align-items: center;
   margin-bottom: 0.75rem;
+}
+
+.game-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.board-placement-toggle {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+}
+
+.board-placement-toggle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .settings-grid {
@@ -594,6 +661,8 @@ fieldset legend {
   width: 100%;
   height: 100%;
   min-height: 0;
+  container-name: board;
+  container-type: inline-size;
 }
 
 .board-canvas {
@@ -608,9 +677,9 @@ fieldset legend {
 
 .piece-controls {
   display: grid;
-  grid-template-columns: minmax(16em, 24em) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 1em;
+  gap: 0.65em 1em;
   flex: 0 0 auto;
   width: 100%;
   color: #fff8ff;
@@ -634,6 +703,8 @@ fieldset legend {
 }
 
 .piece-controls-copy {
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
 }
 
@@ -654,8 +725,8 @@ fieldset legend {
 .piece-controls-heading button {
   display: grid;
   place-items: center;
-  width: 1.7em;
-  height: 1.7em;
+  width: max(1.7em, 2.75rem);
+  height: max(1.7em, 2.75rem);
   padding: 0;
 }
 
@@ -684,25 +755,24 @@ fieldset legend {
 }
 
 .piece-control-actions {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr));
+  grid-column: 1 / -1;
+  grid-row: 2;
   align-items: center;
   gap: 0.55em;
   min-width: 0;
   min-height: 3.6em;
   padding: 0.15em;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scrollbar-color: rgba(244, 211, 94, 0.55) rgba(11, 5, 24, 0.45);
-  scrollbar-width: thin;
 }
 
 .orientation-choice {
   display: flex;
   align-items: center;
   gap: 0.45em;
-  flex: 0 0 auto;
-  min-width: 7.2em;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.25rem;
   background: rgba(11, 5, 24, 0.68);
   border-radius: 0.7em;
   padding: 0.45em 0.65em;
@@ -751,6 +821,8 @@ fieldset legend {
 .controls-placement {
   display: grid;
   grid-template-columns: repeat(2, auto);
+  grid-column: 2;
+  grid-row: 1;
   gap: 0.35em;
   justify-items: stretch;
   flex: 0 0 auto;
@@ -766,9 +838,70 @@ fieldset legend {
 }
 
 .controls-placement button {
+  min-height: 2.75rem;
   border-radius: 0.55em;
   font-size: 0.82em;
   padding: 0.4em 0.7em;
+}
+
+@container board (max-width: 70rem) {
+  .piece-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.6em 0.9em;
+    font-size: clamp(0.92rem, 1.6cqi, 1.05rem);
+    padding: 0.7em 0.85em;
+  }
+
+  .piece-control-actions {
+    width: 100%;
+    min-height: 3.5rem;
+  }
+
+  .orientation-choice {
+    min-height: 3.25rem;
+  }
+}
+
+@container board (max-width: 42rem) {
+  .piece-controls {
+    gap: 0.5rem 0.65rem;
+    max-height: min(48vh, 22rem);
+    padding: 0.6rem;
+  }
+
+  .piece-controls-copy {
+    align-self: start;
+  }
+
+  .piece-controls-heading strong {
+    font-size: 1rem;
+  }
+
+  .piece-controls p {
+    font-size: 0.875rem;
+    line-height: 1.35;
+    margin-block: 0.3rem;
+  }
+
+  .piece-control-actions {
+    margin-inline: -0.6rem;
+    width: calc(100% + 1.2rem);
+    padding-inline: 0.6rem;
+  }
+
+  .orientation-choice {
+    min-height: 3rem;
+    padding: 0.4rem 0.55rem;
+  }
+
+  .orientation-preview {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .controls-placement > span {
+    display: none;
+  }
 }
 
 .controls-placement button.is-selected {

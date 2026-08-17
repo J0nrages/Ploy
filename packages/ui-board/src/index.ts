@@ -1,4 +1,10 @@
-export { PloyBoard, type BoardProps } from "./Board";
+export {
+  PloyBoard,
+  loadControlsPlacement,
+  storeControlsPlacement,
+  type BoardProps,
+  type ControlsPlacement,
+} from "./Board";
 export { fileRank, squareAfterArrow } from "./catalog";
 export {
   movesFrom,
