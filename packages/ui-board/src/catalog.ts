@@ -9,6 +9,20 @@ export const ARMY: Record<string, string> = {
   blue: "#4cc9f0",
 };
 
+export function mixHex(hex: string, into: string, amount: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex) || !/^#[0-9a-fA-F]{6}$/.test(into)) {
+    return hex;
+  }
+  const mix = (offset: number): string => {
+    const from = Number.parseInt(hex.slice(offset, offset + 2), 16);
+    const to = Number.parseInt(into.slice(offset, offset + 2), 16);
+    return Math.round(from + (to - from) * amount)
+      .toString(16)
+      .padStart(2, "0");
+  };
+  return `#${mix(1)}${mix(3)}${mix(5)}`;
+}
+
 export function baseMask(piece: Piece): number {
   if (piece.kind === "commander") {
     return 0x55;

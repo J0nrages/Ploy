@@ -2,10 +2,15 @@ import { expect, test } from "bun:test";
 import {
   directionYaw,
   fileRank,
+  mixHex,
   projectedRoutes,
   squareAfterArrow,
 } from "./catalog";
-import { motionWithoutRotation, shouldStageShield } from "./interaction";
+import {
+  isSelectablePiece,
+  motionWithoutRotation,
+  shouldStageShield,
+} from "./interaction";
 import { createGame, initializeRules, legalMoves, type Move, type Piece } from "@ploy/rules";
 
 test("renderer maps clockwise engine directions onto board coordinates", () => {
@@ -71,6 +76,12 @@ test("fileRank maps e3", () => {
   expect(fileRank(22)).toBe("e3");
 });
 
+test("mixHex blends army paint toward a second hex", () => {
+  expect(mixHex("#3ad67a", "#ffffff", 0)).toBe("#3ad67a");
+  expect(mixHex("#3ad67a", "#000000", 1)).toBe("#000000");
+  expect(mixHex("#ff0000", "#0000ff", 0.5)).toBe("#800080");
+});
+
 test("rotation projections show the resulting movement lanes at piece range", async () => {
   await initializeRules();
   const snapshot = createGame("twoPlayer");
@@ -95,6 +106,21 @@ test("arrow keys stay on the 9x9 graph", () => {
   expect(squareAfterArrow(40, "ArrowLeft")).toBe(39);
   expect(squareAfterArrow(0, "ArrowDown")).toBeNull();
   expect(squareAfterArrow(8, "ArrowRight")).toBeNull();
+});
+
+test("only the acting controller's pieces open action controls", async () => {
+  await initializeRules();
+  const snapshot = createGame("twoPlayer");
+  const greenSquare = snapshot.board
+    .flat()
+    .findIndex((piece) => piece?.controller === "green");
+  const coralSquare = snapshot.board
+    .flat()
+    .findIndex((piece) => piece?.controller === "coral");
+
+  expect(isSelectablePiece(snapshot, "green", greenSquare)).toBe(true);
+  expect(isSelectablePiece(snapshot, "green", coralSquare)).toBe(false);
+  expect(isSelectablePiece(snapshot, "green", 40)).toBe(false);
 });
 
 test("shield staging is required when a post-move rotation exists", () => {

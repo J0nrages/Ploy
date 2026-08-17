@@ -2,7 +2,7 @@ import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import type { Color, Move, Piece, Snapshot, Square } from "@ploy/rules";
-import { ARMY, baseMask, projectedRoutes, toWorld } from "./catalog";
+import { ARMY, baseMask, mixHex, projectedRoutes, toWorld } from "./catalog";
 import { Disc } from "./Disc";
 import type { ShieldStaging } from "./interaction";
 import { Starfield } from "./Starfield";
@@ -382,25 +382,69 @@ function OrientationPreview(props: { piece: Piece; steps: 0 | RotationSteps }) {
   const base = baseMask(props.piece);
   const mask = ((base << rotation) | (base >> (8 - rotation))) & 0xff;
   const color = ARMY[props.piece.color] ?? "#ffffff";
+  const hull = mixHex(color, "#1a1024", 0.18);
+  const highlight = mixHex(color, "#fff6d8", 0.38);
+  const uid = `${props.piece.id}-${props.steps}`.replace(/[^a-zA-Z0-9_-]/g, "");
 
   return (
     <svg className="orientation-preview" viewBox="0 0 40 40" aria-hidden="true">
-      <circle cx="20" cy="20" r="17" fill={color} stroke="rgba(255,255,255,.5)" strokeWidth="1.5" />
+      <defs>
+        <radialGradient id={`hull-${uid}`} cx="36%" cy="30%" r="72%">
+          <stop offset="0%" stopColor={highlight} />
+          <stop offset="52%" stopColor={color} />
+          <stop offset="100%" stopColor={hull} />
+        </radialGradient>
+        <radialGradient id={`core-${uid}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#fff8e4" />
+          <stop offset="100%" stopColor={highlight} />
+        </radialGradient>
+      </defs>
+      <circle cx="20" cy="20" r="18" fill={color} opacity="0.22" />
+      <circle
+        cx="20"
+        cy="20"
+        r="16.4"
+        fill={`url(#hull-${uid})`}
+        stroke="rgba(255,255,255,.38)"
+        strokeWidth="1.2"
+      />
+      <circle cx="20" cy="20" r="10.6" fill="none" stroke="rgba(12,6,18,.28)" strokeWidth="0.7" />
       {Array.from({ length: 8 }, (_, direction) => {
         if ((mask & (1 << direction)) === 0) {
           return null;
         }
         const angle = (direction * Math.PI) / 4;
-        const x = 20 + Math.sin(angle) * 13;
-        const y = 20 - Math.cos(angle) * 13;
+        const left = angle - 0.17;
+        const right = angle + 0.17;
+        const inner = 3.4;
+        const outer = 15.6;
+        const tipX = 20 + Math.sin(angle) * outer;
+        const tipY = 20 - Math.cos(angle) * outer;
+        const vane = [
+          `M ${20 + Math.sin(left) * inner} ${20 - Math.cos(left) * inner}`,
+          `L ${20 + Math.sin(left) * (outer - 1.1)} ${20 - Math.cos(left) * (outer - 1.1)}`,
+          `L ${tipX} ${tipY}`,
+          `L ${20 + Math.sin(right) * (outer - 1.1)} ${20 - Math.cos(right) * (outer - 1.1)}`,
+          `L ${20 + Math.sin(right) * inner} ${20 - Math.cos(right) * inner}`,
+          "Z",
+        ].join(" ");
+        const pipe = [
+          `M ${20 + Math.sin(angle) * 4.2} ${20 - Math.cos(angle) * 4.2}`,
+          `L ${20 + Math.sin(left) * (outer - 1.6)} ${20 - Math.cos(left) * (outer - 1.6)}`,
+          `L ${tipX} ${tipY}`,
+          `L ${20 + Math.sin(right) * (outer - 1.6)} ${20 - Math.cos(right) * (outer - 1.6)}`,
+          "Z",
+        ].join(" ");
         return (
           <g key={direction}>
-            <line x1="20" y1="20" x2={x} y2={y} stroke="#170d25" strokeWidth="5" strokeLinecap="round" />
-            <line x1="20" y1="20" x2={x} y2={y} stroke="#fff8e7" strokeWidth="2" strokeLinecap="round" />
+            <path d={vane} fill="#160c22" />
+            <path d={pipe} fill="#fff4d2" />
+            <circle cx={tipX} cy={tipY} r="1.55" fill={highlight} />
           </g>
         );
       })}
-      <circle cx="20" cy="20" r="2.25" fill="#170d25" />
+      <circle cx="20" cy="20" r="3.15" fill="#140c1c" />
+      <circle cx="20" cy="20" r="1.55" fill={`url(#core-${uid})`} />
     </svg>
   );
 }
@@ -411,6 +455,7 @@ export function PloyBoard({
   legal,
   staging = null,
   invalidAttempt = 0,
+  actingColor,
   onSelectSquare,
   onCommitRotation,
   onCommitStaging,
@@ -440,10 +485,12 @@ export function PloyBoard({
   }, [legal, staging]);
   const actionSquare = staging?.to ?? selected;
   const sourceSquare = staging?.from ?? selected;
-  const actionPiece =
+  const selectedActionPiece =
     sourceSquare === null
       ? null
       : snapshot.board[Math.floor(sourceSquare / 9)]?.[sourceSquare % 9] ?? null;
+  const actionPiece =
+    selectedActionPiece?.controller === actingColor ? selectedActionPiece : null;
   const projectedMoveCount =
     previewRotationSteps && actionSquare !== null && actionPiece
       ? projectedRoutes(
@@ -488,9 +535,11 @@ export function PloyBoard({
       <color attach="background" args={["#070314"]} />
       <fog attach="fog" args={["#070314", 22, 55]} />
       <Starfield />
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[4, 16, 2]} intensity={1.55} color="#fff4e6" />
-      <pointLight position={[-8, 6, -6]} intensity={0.55} color="#9b5de5" />
+      <hemisphereLight args={["#9eb8ff", "#1a0c2c", 0.42]} />
+      <ambientLight intensity={0.34} />
+      <directionalLight position={[4, 16, 2]} intensity={1.35} color="#fff4e6" />
+      <directionalLight position={[-6, 8, -4]} intensity={0.32} color="#7ab8ff" />
+      <pointLight position={[-8, 6, -6]} intensity={0.4} color="#9b5de5" />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.08, 0]}>
         <circleGeometry args={[7.4, 64]} />
         <meshStandardMaterial color="#1a0c2c" metalness={0.15} roughness={0.7} />

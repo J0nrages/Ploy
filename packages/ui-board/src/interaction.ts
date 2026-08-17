@@ -21,6 +21,14 @@ export function movesFrom(snapshot: Snapshot, color: Color, from: Square): Move[
   );
 }
 
+export function isSelectablePiece(
+  snapshot: Snapshot,
+  actingColor: Color,
+  square: Square,
+): boolean {
+  return pieceAt(snapshot, square)?.controller === actingColor;
+}
+
 export function motionsTo(
   moves: Move[],
   to: Square,
@@ -107,12 +115,9 @@ export function useBoardInteraction(args: {
       cancel();
       return;
     }
-    if (selected !== null) {
-      const piece = pieceAt(args.snapshot, square);
-      if (piece?.controller !== args.actingColor) {
-        setInvalidAttempt((attempt) => attempt + 1);
-        return;
-      }
+    if (!isSelectablePiece(args.snapshot, args.actingColor, square)) {
+      setInvalidAttempt((attempt) => attempt + 1);
+      return;
     }
     setInvalidAttempt(0);
     setSelected(square);
