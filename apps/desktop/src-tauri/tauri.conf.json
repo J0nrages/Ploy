@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Ploy",
+  "version": "0.1.0",
+  "identifier": "dev.ploy.desktop",
+  "build": {
+    "frontendDist": "../../web/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "bun run --filter web dev",
+    "beforeBuildCommand": "bun run --filter web build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Ploy",
+        "width": 1280,
+        "height": 800
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/rules" },
+    { "path": "./packages/ai" },
+    { "path": "./packages/ui-board" },
+    { "path": "./apps/web" }
+  ]
+}

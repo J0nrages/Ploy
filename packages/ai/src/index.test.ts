@@ -1,0 +1,65 @@
+import { expect, test } from "bun:test";
+import { createGame, initializeRules, isLegal } from "@ploy/rules";
+import { AiError, createPloyBot } from "./index";
+
+test("AiError is constructible", () => {
+  const error = new AiError("engineFailure");
+  expect(error.code).toBe("engineFailure");
+});
+
+test("worker chooses a legal two-player move", async () => {
+  await initializeRules();
+  const bot = createPloyBot();
+  const snapshot = createGame("twoPlayer");
+  const result = await bot.chooseMove(
+    snapshot,
+    "green",
+    { maxTimeMs: 5_000, maxDepth: 1, maxNodes: 200, randomSeed: 4 },
+    new AbortController().signal,
+  );
+  expect(result.nodes).toBeGreaterThan(0);
+  expect(isLegal(snapshot, result.move, "green")).toBe(true);
+  bot.terminate();
+});
+
+test("abort rejects and the recreated worker handles the next turn", async () => {
+  const bot = createPloyBot();
+  const snapshot = createGame("twoPlayer");
+  const controller = new AbortController();
+  const pending = bot.chooseMove(
+    snapshot,
+    "green",
+    { maxTimeMs: 5_000, maxDepth: 2, maxNodes: 8_000, randomSeed: 1 },
+    controller.signal,
+  );
+  controller.abort();
+  await expect(pending).rejects.toMatchObject({ code: "aborted" });
+  const recovered = await bot.chooseMove(
+    snapshot,
+    "green",
+    { maxTimeMs: 5_000, maxDepth: 1, maxNodes: 200, randomSeed: 2 },
+    new AbortController().signal,
+  );
+  expect(isLegal(snapshot, recovered.move, "green")).toBe(true);
+  bot.terminate();
+});
+
+test("timeout terminates the search worker and the replacement recovers", async () => {
+  const bot = createPloyBot();
+  const snapshot = createGame("twoPlayer");
+  const timedOut = bot.chooseMove(
+    snapshot,
+    "green",
+    { maxTimeMs: 1, maxDepth: 8, maxNodes: 2_000_000, randomSeed: 5 },
+    new AbortController().signal,
+  );
+  await expect(timedOut).rejects.toMatchObject({ code: "timeout" });
+  const recovered = await bot.chooseMove(
+    snapshot,
+    "green",
+    { maxTimeMs: 5_000, maxDepth: 1, maxNodes: 200, randomSeed: 6 },
+    new AbortController().signal,
+  );
+  expect(isLegal(snapshot, recovered.move, "green")).toBe(true);
+  bot.terminate();
+});

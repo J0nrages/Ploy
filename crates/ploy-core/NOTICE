@@ -1,0 +1,20 @@
+Ploy search attribution
+=======================
+
+The two-player lookahead is a Rust/WebAssembly adaptation of the search
+architecture documented in Dr. Thomas Tensi's open-source Ada Ploy engine:
+iterative deepening, MTD(f), alpha-beta, Zobrist fingerprints, a transposition
+table, make/unmake, refutation/history ordering, bounded recapture and
+Commander-threat extensions, and bounded capture quiescence. It is adapted
+for bounded WASM memory and deterministic node budgets.
+
+Upstream project and source:
+https://tensi.eu/thomas/programming/games/ploy/ploy.html
+
+Copyright (c) 2013, Dr. Thomas Tensi
+
+The upstream MIT license is reproduced in TENSI-LICENSE.
+
+Only the search architecture is adapted. This remaster's rules follow the
+1970 3M instruction sheet; the later rule variants in the Ada program are not
+used.

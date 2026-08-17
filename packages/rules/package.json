@@ -1,0 +1,15 @@
+{
+  "name": "@ploy/rules",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./runtime": "./src/runtime.ts",
+    "./wasm/ploy_core.wasm": "./wasm/ploy_core.wasm"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  }
+}

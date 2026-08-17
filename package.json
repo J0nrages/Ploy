@@ -1,0 +1,23 @@
+{
+  "name": "ploy",
+  "private": true,
+  "packageManager": "bun@1.2.22",
+  "workspaces": ["apps/*", "packages/*"],
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --filter web dev",
+    "dev:desktop": "cargo tauri dev --manifest-path apps/desktop/src-tauri/Cargo.toml",
+    "build:wasm": "cargo build --release --target wasm32-unknown-unknown -p ploy-wasm && bun scripts/copy-wasm.ts",
+    "test": "bun test packages apps convex",
+    "lint": "eslint .",
+    "typecheck": "tsc -b --pretty false",
+    "wasm-gate": "bun scripts/wasm-gate.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "convex": "^1.27.3",
+    "eslint": "^10.8.1",
+    "typescript": "~5.9.2",
+    "typescript-eslint": "^8.67.0"
+  }
+}

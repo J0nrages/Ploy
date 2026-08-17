@@ -1,0 +1,9 @@
+{
+  "name": "desktop",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Use bun run dev:desktop from the repo root'",
+    "typecheck": "echo 'desktop shell has no TypeScript sources'"
+  }
+}

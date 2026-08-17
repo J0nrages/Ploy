@@ -1,0 +1,610 @@
+:root {
+  color: #f6e9ff;
+  background: #070314;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  border: 1px solid #9b5de5;
+  background: #2a1244;
+  color: #fff7fb;
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:hover,
+select:hover {
+  border-color: #f4d35e;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgba(76, 201, 240, 0.55);
+  outline-offset: 2px;
+}
+
+.primary {
+  color: #170d25;
+  background: #f4d35e;
+  border-color: #f4d35e;
+  font-weight: 700;
+}
+
+.wide {
+  width: 100%;
+  justify-content: center;
+}
+
+.ghost {
+  background: transparent;
+  border-color: transparent;
+  padding-left: 0;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr;
+  height: 100%;
+}
+
+.hud {
+  padding: 1.25rem 1.4rem 2rem;
+  background: linear-gradient(180deg, rgba(45, 22, 72, 0.96), rgba(16, 8, 28, 0.92));
+  border-right: 1px solid #6f4aa1;
+  overflow: auto;
+}
+
+.hud.menu {
+  width: min(100%, 48rem);
+  margin: 0 auto;
+  border-right: none;
+  min-height: 100%;
+}
+
+.local-menu {
+  width: min(100%, 62rem);
+  padding-bottom: 4rem;
+}
+
+.eyebrow {
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #4cc9f0;
+  font-size: 0.75rem;
+}
+
+.hud h1 {
+  margin: 0.2rem 0 0.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #f4d35e;
+}
+
+.hud h2,
+.hud h3 {
+  color: #fff7fb;
+}
+
+.hud h2 {
+  margin: 0.25rem 0 0.65rem;
+}
+
+.hud h3 {
+  margin-bottom: 0.35rem;
+}
+
+.lede,
+.hint {
+  color: #d7c4f0;
+  line-height: 1.45;
+}
+
+.board-wrap {
+  min-height: 0;
+  position: relative;
+}
+
+.status {
+  color: #e9fbff;
+  background: rgba(76, 201, 240, 0.12);
+  border: 1px solid rgba(76, 201, 240, 0.4);
+  border-radius: 0.75rem;
+  font-weight: 700;
+  padding: 0.75rem 0.85rem;
+}
+
+.thinking {
+  color: #f4d35e;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.menu-actions {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+.menu-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  border-radius: 0.85rem;
+  padding: 0.9rem 1rem;
+  text-align: left;
+}
+
+.menu-action span {
+  color: inherit;
+  font-size: 0.88rem;
+  font-weight: 400;
+  opacity: 0.82;
+}
+
+.menu-card,
+.rules-panel {
+  background:
+    linear-gradient(145deg, rgba(42, 18, 68, 0.72), rgba(16, 8, 28, 0.9));
+  border: 1px solid rgba(183, 125, 255, 0.48);
+  border-radius: 1.15rem;
+  box-shadow: 0 1.2rem 3rem rgba(3, 1, 12, 0.25);
+  margin: 1rem 0;
+  padding: 1.25rem;
+}
+
+.resume-card {
+  border-color: rgba(76, 201, 240, 0.6);
+}
+
+.save-count {
+  display: grid;
+  place-items: center;
+  min-width: 2rem;
+  height: 2rem;
+  color: #08131b;
+  background: #4cc9f0;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.saved-game-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.saved-game {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem;
+  background: rgba(8, 3, 20, 0.44);
+  border: 1px solid rgba(76, 201, 240, 0.2);
+  border-radius: 0.85rem;
+}
+
+.saved-game-summary {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.saved-game-summary > span {
+  color: #d7c4f0;
+}
+
+.saved-game-summary small {
+  color: #8f7da7;
+}
+
+.saved-game-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.45rem;
+}
+
+.section-heading,
+.game-nav {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.section-heading .eyebrow {
+  margin-top: 0;
+}
+
+.game-nav {
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.settings-grid label {
+  min-width: 0;
+}
+
+.field-label,
+fieldset legend {
+  color: #d7c4f0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 1.15rem 0 0.55rem;
+  text-transform: uppercase;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.choice-grid-modes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.choice-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 4.4rem;
+  background: rgba(8, 3, 20, 0.44);
+  border: 1px solid rgba(155, 93, 229, 0.52);
+  border-radius: 0.85rem;
+  padding: 0.8rem;
+  text-align: left;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.choice-card:hover {
+  background: rgba(70, 31, 108, 0.56);
+  border-color: #c99cff;
+  transform: translateY(-1px);
+}
+
+.choice-card.is-selected {
+  background: linear-gradient(135deg, rgba(244, 211, 94, 0.18), rgba(76, 201, 240, 0.1));
+  border-color: #f4d35e;
+  box-shadow: inset 0 0 0 1px rgba(244, 211, 94, 0.28);
+}
+
+.choice-card strong,
+.choice-card small {
+  display: block;
+}
+
+.choice-card strong {
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.choice-card small {
+  color: #bda9d6;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  margin-top: 0.18rem;
+}
+
+.choice-indicator {
+  display: grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 2px solid #8360ad;
+  border-radius: 50%;
+}
+
+.choice-card.is-selected .choice-indicator {
+  background: #f4d35e;
+  border-color: #f4d35e;
+  box-shadow: inset 0 0 0 3px #2a1244;
+}
+
+.computer-settings {
+  background: rgba(7, 3, 20, 0.34);
+  border: 1px solid rgba(76, 201, 240, 0.18);
+  border-radius: 0.9rem;
+  margin-top: 0.9rem;
+  padding: 0.15rem 0.85rem 0.85rem;
+}
+
+.computer-settings fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.option-pills {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.option-pills button {
+  background: rgba(42, 18, 68, 0.7);
+  border-radius: 0.65rem;
+  padding-inline: 0.55rem;
+}
+
+.option-pills button.is-selected {
+  background: #f4d35e;
+  border-color: #f4d35e;
+  color: #170d25;
+  font-weight: 700;
+}
+
+.color-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.color-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: rgba(42, 18, 68, 0.7);
+  border-radius: 0.75rem;
+  text-align: left;
+}
+
+.color-choice.is-selected {
+  border-color: #f4d35e;
+  box-shadow: inset 0 0 0 1px rgba(244, 211, 94, 0.3);
+}
+
+.color-choice strong,
+.color-choice small {
+  display: block;
+}
+
+.color-choice small {
+  color: #bda9d6;
+  font-size: 0.72rem;
+  margin-top: 0.1rem;
+}
+
+.color-dot {
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  box-shadow: 0 0 0.7rem currentColor;
+}
+
+.color-dot.green {
+  color: #37c871;
+  background: #37c871;
+}
+
+.color-dot.coral {
+  color: #ec625f;
+  background: #ec625f;
+}
+
+.menu-card > .primary.wide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 0.75rem;
+  margin-top: 1.15rem;
+  padding: 0.72rem 1rem;
+  transition:
+    filter 140ms ease,
+    transform 140ms ease;
+}
+
+.menu-card > .primary.wide:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.warning {
+  color: #ffd7a8;
+  background: rgba(255, 155, 66, 0.12);
+  border-left: 3px solid #ff9b42;
+  padding: 0.6rem 0.75rem;
+}
+
+.save-state {
+  color: #99e6b3;
+  font-size: 0.85rem;
+}
+
+.turn-actions {
+  margin-top: 0.85rem;
+}
+
+.turn-actions > p {
+  color: #e7d9f6;
+  line-height: 1.4;
+  margin: 0 0 0.55rem;
+}
+
+.piece-controls {
+  width: min(17rem, 72vw);
+  color: #fff8ff;
+  background:
+    linear-gradient(145deg, rgba(46, 20, 73, 0.97), rgba(12, 5, 25, 0.97));
+  border: 1px solid rgba(244, 211, 94, 0.75);
+  border-radius: 0.9rem;
+  box-shadow:
+    0 1rem 2.5rem rgba(2, 0, 8, 0.58),
+    0 0 1.5rem rgba(155, 93, 229, 0.22);
+  padding: 0.7rem;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.piece-controls-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.piece-controls-heading strong {
+  color: #f4d35e;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.piece-controls-heading button {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+}
+
+.piece-controls p {
+  color: #d7c4f0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: 0.45rem 0 0.6rem;
+}
+
+.piece-controls .piece-control-error {
+  color: #ffd0ce;
+  background: rgba(236, 98, 95, 0.16);
+  border-left: 3px solid #ec625f;
+  padding: 0.35rem 0.45rem;
+}
+
+.piece-control-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.piece-control-actions button {
+  border-radius: 0.55rem;
+  font-size: 0.75rem;
+  padding: 0.35rem 0.55rem;
+}
+
+.rules-panel {
+  line-height: 1.5;
+}
+
+.rules-panel ul,
+.rules-panel ol {
+  padding-left: 1.35rem;
+}
+
+.rules-panel li + li {
+  margin-top: 0.35rem;
+}
+
+.error {
+  color: #ff6b6b;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0.75rem 0;
+}
+
+label > select,
+label > input {
+  width: 100%;
+}
+
+.seats {
+  list-style: none;
+  padding: 0;
+  color: #d7c4f0;
+}
+
+.seats strong {
+  text-transform: capitalize;
+  color: #fff7fb;
+}
+
+.waiting {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: #c9b6ff;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 860px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .hud {
+    border-right: none;
+    border-bottom: 1px solid #6f4aa1;
+    max-height: 42vh;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .choice-grid,
+  .choice-grid-modes,
+  .option-pills,
+  .color-choices {
+    grid-template-columns: 1fr;
+  }
+
+  .choice-card {
+    min-height: 4rem;
+  }
+
+  .saved-game {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .saved-game-actions button {
+    flex: 1;
+  }
+}

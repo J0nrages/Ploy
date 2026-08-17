@@ -1,0 +1,24 @@
+{
+  "name": "@ploy/ui-board",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@ploy/rules": "workspace:*",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.4.2",
+    "react": "^19.1.1",
+    "three": "^0.182.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.12",
+    "@types/three": "^0.182.0"
+  }
+}
