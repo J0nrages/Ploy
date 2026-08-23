@@ -167,7 +167,9 @@ export function OnlinePlay(props: { onBack: () => void }) {
       computerEnabled && state?.room.activeGameId
         ? `${state.room.activeGameId}:${snapshot?.ply ?? -1}:${acting ?? "none"}`
         : null,
-    difficulty: computerDifficulty,
+    profile: { strength: computerDifficulty, style: "balanced" },
+    gameSeed: 0,
+    profileRevision: 0,
     onMove: commit,
     onError: setError,
   });

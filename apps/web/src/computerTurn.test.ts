@@ -79,6 +79,13 @@ test("turn keys change for alternative positions at the same ply", () => {
   );
 });
 
+test("turn keys change when an opponent profile revision changes", () => {
+  const snapshot = createGame("twoPlayer");
+  expect(snapshotTurnKey("game:profile:1", snapshot, "green")).not.toBe(
+    snapshotTurnKey("game:profile:2", snapshot, "green"),
+  );
+});
+
 test("retry options remain within useful bounds", () => {
   expect(
     reducedRetryOptions({ maxTimeMs: 200, maxDepth: 1, maxNodes: 250, randomSeed: 1 }),

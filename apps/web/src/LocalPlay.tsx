@@ -8,7 +8,12 @@ import {
   type Move,
   type Snapshot,
 } from "@ploy/rules";
-import { type Difficulty } from "@ploy/ai";
+import {
+  OPPONENT_STYLES,
+  STRENGTHS,
+  type OpponentStyle,
+  type Strength,
+} from "@ploy/ai";
 import {
   PloyBoard,
   loadControlsPlacement,
@@ -18,6 +23,7 @@ import {
 } from "@ploy/ui-board";
 import {
   createLocalGameId,
+  createGameSeed,
   deleteLocalGame,
   loadLocalGames,
   saveLocalGame,
@@ -38,6 +44,7 @@ export function LocalPlay(props: { onBack: () => void }) {
   const latestGame = savedGames[0] ?? null;
   const [view, setView] = useState<LocalView>("setup");
   const [showRules, setShowRules] = useState(false);
+  const [showOpponentSettings, setShowOpponentSettings] = useState(false);
   const [controlsPlacement, setControlsPlacement] =
     useState<ControlsPlacement>(loadControlsPlacement);
   const [currentGameId, setCurrentGameId] = useState<string | null>(latestGame?.id ?? null);
@@ -48,8 +55,15 @@ export function LocalPlay(props: { onBack: () => void }) {
   const [playKind, setPlayKind] = useState<LocalPlayKind>(
     latestGame?.settings.playKind ?? "hotseat",
   );
-  const [difficulty, setDifficulty] = useState<Difficulty>(
-    latestGame?.settings.difficulty ?? "navigator",
+  const [strength, setStrength] = useState<Strength>(
+    latestGame?.settings.strength ?? "navigator",
+  );
+  const [style, setStyle] = useState<OpponentStyle>(
+    latestGame?.settings.style ?? "balanced",
+  );
+  const [gameSeed, setGameSeed] = useState(latestGame?.settings.gameSeed ?? createGameSeed);
+  const [profileRevision, setProfileRevision] = useState(
+    latestGame?.settings.profileRevision ?? 0,
   );
   const [humanColor, setHumanColor] = useState<Extract<Color, "green" | "coral">>(
     latestGame?.settings.humanColor ?? "green",
@@ -75,11 +89,19 @@ export function LocalPlay(props: { onBack: () => void }) {
       return;
     }
     const game: LocalGameSave = {
-      version: 2,
+      version: 3,
       id: currentGameId,
       snapshot,
       history,
-      settings: { mode: snapshot.mode, playKind, difficulty, humanColor },
+      settings: {
+        mode: snapshot.mode,
+        playKind,
+        strength,
+        style,
+        gameSeed,
+        profileRevision,
+        humanColor,
+      },
       createdAt: currentGameCreatedAt,
       updatedAt: Date.now(),
     };
@@ -88,11 +110,14 @@ export function LocalPlay(props: { onBack: () => void }) {
   }, [
     currentGameCreatedAt,
     currentGameId,
-    difficulty,
+    gameSeed,
     history,
     humanColor,
     playKind,
+    profileRevision,
     snapshot,
+    strength,
+    style,
     view,
   ]);
 
@@ -119,12 +144,34 @@ export function LocalPlay(props: { onBack: () => void }) {
     enabled: computerEnabled,
     turnKey:
       currentGameId && computerEnabled
-        ? snapshotTurnKey(currentGameId, snapshot, acting)
+        ? snapshotTurnKey(`${currentGameId}:profile:${profileRevision}`, snapshot, acting)
         : null,
-    difficulty,
+    profile: { strength, style },
+    gameSeed,
+    profileRevision,
     onMove: commit,
     onError: setError,
   });
+
+  const updateStrength = (next: Strength): void => {
+    if (next === strength) {
+      return;
+    }
+    setStrength(next);
+    if (view === "play") {
+      setProfileRevision((revision) => revision + 1);
+    }
+  };
+
+  const updateStyle = (next: OpponentStyle): void => {
+    if (next === style) {
+      return;
+    }
+    setStyle(next);
+    if (view === "play") {
+      setProfileRevision((revision) => revision + 1);
+    }
+  };
 
   const interaction = useBoardInteraction({
     snapshot,
@@ -147,12 +194,15 @@ export function LocalPlay(props: { onBack: () => void }) {
     const now = Date.now();
     setCurrentGameId(createLocalGameId());
     setCurrentGameCreatedAt(now);
+    setGameSeed(createGameSeed());
+    setProfileRevision(0);
     setPlayKind(nextPlayKind);
     setSnapshot(createGame(mode));
     setHistory([]);
     setError(null);
     interaction.cancel();
     setShowRules(false);
+    setShowOpponentSettings(false);
     setView("play");
   };
 
@@ -161,12 +211,16 @@ export function LocalPlay(props: { onBack: () => void }) {
     setCurrentGameCreatedAt(game.createdAt);
     setMode(game.settings.mode);
     setPlayKind(game.settings.playKind);
-    setDifficulty(game.settings.difficulty);
+    setStrength(game.settings.strength);
+    setStyle(game.settings.style);
+    setGameSeed(game.settings.gameSeed);
+    setProfileRevision(game.settings.profileRevision);
     setHumanColor(game.settings.humanColor);
     setSnapshot(game.snapshot);
     setHistory(game.history);
     setError(null);
     setShowRules(false);
+    setShowOpponentSettings(false);
     setView("play");
   };
 
@@ -282,22 +336,38 @@ export function LocalPlay(props: { onBack: () => void }) {
               {playKind === "computer" ? (
                 <div className="computer-settings">
                   <fieldset>
-                    <legend>Difficulty</legend>
+                    <legend>Strength</legend>
                     <div className="option-pills">
-                      {(["cadet", "navigator", "commander", "strategist"] as const).map(
-                        (level) => (
+                      {STRENGTHS.map((level) => (
                           <button
                             key={level}
                             type="button"
-                            className={difficulty === level ? "is-selected" : ""}
-                            aria-pressed={difficulty === level}
-                            onClick={() => setDifficulty(level)}
+                            className={strength === level ? "is-selected" : ""}
+                            aria-pressed={strength === level}
+                            onClick={() => updateStrength(level)}
                           >
-                            {difficultyName(level)}
+                            {strengthName(level)}
                           </button>
-                        ),
-                      )}
+                        ))}
                     </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend>Style</legend>
+                    <div className="option-pills option-pills-styles">
+                      {OPPONENT_STYLES.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className={style === option ? "is-selected" : ""}
+                          aria-pressed={style === option}
+                          title={styleDescription(option)}
+                          onClick={() => updateStyle(option)}
+                        >
+                          {styleName(option)}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="hint opponent-style-hint">{styleDescription(style)}</p>
                   </fieldset>
                   <fieldset>
                     <legend>Play as</legend>
@@ -382,6 +452,15 @@ export function LocalPlay(props: { onBack: () => void }) {
             ← Game menu
           </button>
           <div className="game-nav-actions">
+            {playKind === "computer" ? (
+              <button
+                type="button"
+                aria-expanded={showOpponentSettings}
+                onClick={() => setShowOpponentSettings((visible) => !visible)}
+              >
+                Opponent
+              </button>
+            ) : null}
             <button
               type="button"
               className="board-placement-toggle"
@@ -403,6 +482,71 @@ export function LocalPlay(props: { onBack: () => void }) {
             ? "Auto-saved on this device"
             : "Auto-save unavailable — keep this tab open"}
         </p>
+        {showOpponentSettings && playKind === "computer" ? (
+          <section className="computer-settings in-game-computer-settings">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Computer profile</p>
+                <h2>{`${strengthName(strength)} · ${styleName(style)}`}</h2>
+              </div>
+              <span className="profile-revision">Revision {profileRevision}</span>
+            </div>
+            <p className="hint">
+              Changes apply to the next computer decision. An active search restarts safely.
+            </p>
+            <fieldset>
+              <legend>Strength</legend>
+              <div className="option-pills">
+                {STRENGTHS.map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    className={strength === level ? "is-selected" : ""}
+                    aria-pressed={strength === level}
+                    onClick={() => updateStrength(level)}
+                  >
+                    {strengthName(level)}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset>
+              <legend>Style</legend>
+              <div className="option-pills option-pills-styles">
+                {OPPONENT_STYLES.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={style === option ? "is-selected" : ""}
+                    aria-pressed={style === option}
+                    title={styleDescription(option)}
+                    onClick={() => updateStyle(option)}
+                  >
+                    {styleName(option)}
+                  </button>
+                ))}
+              </div>
+              <p className="hint opponent-style-hint">{styleDescription(style)}</p>
+            </fieldset>
+            {import.meta.env.DEV && computer.lastResult ? (
+              <details className="ai-diagnostics">
+                <summary>Developer search diagnostics</summary>
+                <dl>
+                  <div><dt>Depth</dt><dd>{computer.lastResult.depth}</dd></div>
+                  <div><dt>Nodes</dt><dd>{computer.lastResult.nodes.toLocaleString()}</dd></div>
+                  <div><dt>Best score</dt><dd>{computer.lastResult.bestScore}</dd></div>
+                  <div><dt>Selected score</dt><dd>{computer.lastResult.score}</dd></div>
+                  <div><dt>Score loss</dt><dd>{computer.lastResult.scoreLoss}</dd></div>
+                  <div><dt>Fallback</dt><dd>{computer.lastResult.fallback}</dd></div>
+                  <div>
+                    <dt>Variation</dt>
+                    <dd>{computer.lastResult.principalVariation.length} plies</dd>
+                  </div>
+                </dl>
+              </details>
+            ) : null}
+          </section>
+        ) : null}
         {showRules ? <RulesHelp onClose={() => setShowRules(false)} /> : null}
         <p className="hint">{moveHint(acting, legalCount, interaction.selected !== null)}</p>
       </PlayHud>
@@ -493,17 +637,37 @@ function ChoiceButton(props: {
   );
 }
 
-function difficultyName(difficulty: Difficulty): string {
-  if (difficulty === "cadet") {
+function strengthName(strength: Strength): string {
+  if (strength === "cadet") {
     return "Cadet";
   }
-  if (difficulty === "navigator") {
+  if (strength === "navigator") {
     return "Navigator";
   }
-  if (difficulty === "commander") {
+  if (strength === "commander") {
     return "Commander";
   }
   return "Strategist";
+}
+
+function styleName(style: OpponentStyle): string {
+  return style.charAt(0).toUpperCase() + style.slice(1);
+}
+
+function styleDescription(style: OpponentStyle): string {
+  if (style === "aggressor") {
+    return "Favors forcing captures and Commander threats when the tactics remain sound.";
+  }
+  if (style === "guardian") {
+    return "Prioritizes Commander safety, blocking, and lower-risk positions.";
+  }
+  if (style === "maneuverer") {
+    return "Values mobility, central access, and productive reorientation.";
+  }
+  if (style === "trickster") {
+    return "Prefers unusual rotations and threat creation within safe limits.";
+  }
+  return "Balances material, mobility, safety, and immediate threats.";
 }
 
 function PanelPlacementIcon(props: { placement: ControlsPlacement }) {

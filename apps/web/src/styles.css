@@ -544,6 +544,58 @@ fieldset legend {
   gap: 0.45rem;
 }
 
+.option-pills-styles {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.opponent-style-hint {
+  margin-bottom: 0;
+}
+
+.in-game-computer-settings {
+  margin-bottom: 0.9rem;
+}
+
+.in-game-computer-settings .option-pills {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-revision {
+  color: #bda9d6;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.ai-diagnostics {
+  border-top: 1px solid rgba(76, 201, 240, 0.18);
+  margin-top: 0.8rem;
+  padding-top: 0.65rem;
+}
+
+.ai-diagnostics summary {
+  color: #4cc9f0;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.ai-diagnostics dl {
+  display: grid;
+  gap: 0.3rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ai-diagnostics dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ai-diagnostics dt,
+.ai-diagnostics dd {
+  font-size: 0.72rem;
+  margin: 0;
+}
+
 .option-pills button {
   background: rgba(42, 18, 68, 0.7);
   border-radius: 0.65rem;
@@ -1017,4 +1069,3 @@ label > input {
   }
 
 }
-
