@@ -31,7 +31,7 @@ todos:
     status: in_progress
   - id: acceptance
     content: Run the complete native, WASM, browser, Convex, and desktop acceptance suite and rewrite the README.
-    status: in_progress
+    status: completed
 isProject: false
 ---
 

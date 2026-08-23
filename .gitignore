@@ -12,6 +12,7 @@ dist/
 build/
 target/
 *.tsbuildinfo
+apps/desktop/src-tauri/gen/
 
 # Caches
 .cache/
