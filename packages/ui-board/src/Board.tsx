@@ -18,6 +18,7 @@ import {
   type ShieldStaging,
 } from "./interaction";
 import { Starfield } from "./Starfield";
+import { cameraPositionForColor } from "./viewpoint";
 
 export type ControlsPlacement = "top" | "bottom";
 type RotationSteps = 1 | 2 | 3 | 4 | 5 | 6 | 7;
@@ -30,6 +31,7 @@ export type BoardProps = {
   staging?: ShieldStaging | null;
   invalidAttempt?: number;
   actingColor: Color | null;
+  perspectiveColor?: Color | null;
   controlsPlacement?: ControlsPlacement;
   onControlsPlacementChange?: (placement: ControlsPlacement) => void;
   showPlacementControls?: boolean;
@@ -632,6 +634,7 @@ export function PloyBoard({
   staging = null,
   invalidAttempt = 0,
   actingColor,
+  perspectiveColor = null,
   controlsPlacement: controlledControlsPlacement,
   onControlsPlacementChange,
   showPlacementControls = true,
@@ -718,6 +721,7 @@ export function PloyBoard({
     storeControlsPlacement(placement);
     onControlsPlacementChange?.(placement);
   };
+  const cameraPosition = cameraPositionForColor(snapshot.mode, perspectiveColor);
 
   const controls = actionPiece ? (
     <PieceControls
@@ -744,7 +748,7 @@ export function PloyBoard({
       {controlsPlacement === "top" ? controls : null}
       <div className="board-canvas">
         <Canvas
-          camera={{ position: [0, 12.5, 12.5], fov: 38 }}
+          camera={{ position: cameraPosition, fov: 38 }}
           onPointerLeave={() => setHoveredSquare(null)}
           onPointerMissed={() => setHoveredSquare(null)}
         >

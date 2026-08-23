@@ -16,3 +16,4 @@ export {
   type DestinationHover,
   type ShieldStaging,
 } from "./interaction";
+export { cameraPositionForColor, type BoardCameraPosition } from "./viewpoint";

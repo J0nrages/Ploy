@@ -20,6 +20,21 @@ import {
   stagedShieldRotationSteps,
 } from "./interaction";
 import { createGame, initializeRules, legalMoves, type Move, type Piece } from "@ploy/rules";
+import { cameraPositionForColor } from "./viewpoint";
+
+test("camera places each two-player participant behind their own army", () => {
+  expect(cameraPositionForColor("twoPlayer", "green")).toEqual([0, 12.5, 12.5]);
+  expect(cameraPositionForColor("twoPlayer", "coral")).toEqual([0, 12.5, -12.5]);
+});
+
+test("four-player cameras follow each mode's setup corners", () => {
+  const ffaBlue = cameraPositionForColor("fourPlayerFfa", "blue");
+  const partnershipBlue = cameraPositionForColor("partnership", "blue");
+  expect(ffaBlue[0]).toBeGreaterThan(0);
+  expect(ffaBlue[2]).toBeGreaterThan(0);
+  expect(partnershipBlue[0]).toBeGreaterThan(0);
+  expect(partnershipBlue[2]).toBeLessThan(0);
+});
 
 test("renderer maps clockwise engine directions onto board coordinates", () => {
   expect(directionYaw(0)).toBeCloseTo(0);
