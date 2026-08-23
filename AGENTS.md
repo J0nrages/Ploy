@@ -23,3 +23,23 @@ The scan wins on rules. The execution plan wins on product scope, architecture, 
 ## Completion
 
 An individual work order is complete only when its stated gate passes. The remaster is complete only when every command and behavioral check in the plan's Final acceptance section passes.
+
+## Cursor Cloud specific instructions
+
+This checkout is the single Ploy remaster repo (`github.com/j0nrages/ploy`). There is no sibling repo to clone. Stay on `main` unless the user names another branch. `origin/3d-and-ui` is a remaster UI branch ahead of `main`. `origin/legacy/pre-remaster` is frozen pre-remaster Python and is not the current product. Ignore `archive/` for remaster work.
+
+Standard install, lint, test, and dev commands live in `README.md`. WASM artifacts are committed; rebuild with `bun run build:wasm` only when changing `crates/ploy-core` or `crates/ploy-wasm`.
+
+### Services
+
+| Service | When | How |
+| --- | --- | --- |
+| Vite web app | Required for local and online UI | `bun run dev` → `http://localhost:5173` |
+| Anonymous Convex | Required only for online rooms | `CONVEX_AGENT_MODE=anonymous bun x convex dev` |
+| Tauri desktop | Optional | `bun run dev:desktop` after platform WebKitGTK/pkg-config libs |
+
+Do not run `convex deploy` or publish unless the user asks.
+
+### Convex + Vite gotcha
+
+`convex dev` writes `CONVEX_URL` (local default `http://127.0.0.1:3210`) into the repo-root gitignored `.env.local`. Vite's env root is `apps/web`, and the client only constructs Convex when `VITE_CONVEX_URL` is set, so put that same URL in `apps/web/.env.local` and restart Vite. `convex dev --once` pushes functions and exits; leave `convex dev` running for live rooms. On first configure, decline Convex AI-files setup (`bun x convex ai-files disable` if it prompts). Do not commit `.env.local`, `.convex/`, or CLI-only `convex.json` edits.
