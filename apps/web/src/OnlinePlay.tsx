@@ -1,7 +1,12 @@
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { controllerForTurn, type Color, type Mode, type Move, type Snapshot } from "@ploy/rules";
-import { type Difficulty } from "@ploy/ai";
+import {
+  OPPONENT_STYLES,
+  STRENGTHS,
+  type OpponentStyle,
+  type Strength,
+} from "@ploy/ai";
 import { PloyBoard, useBoardInteraction } from "@ploy/ui-board";
 import { api } from "./convexApi";
 import { PlayHud } from "./PlayHud";
@@ -13,7 +18,9 @@ type PublicSeat = {
   color: Color;
   displayName: string;
   kind: "human" | "computer";
-  difficulty: Difficulty | null;
+  strength: Strength | null;
+  style: OpponentStyle | null;
+  profileRevision: number;
   occupied: boolean;
   stale: boolean;
 };
@@ -27,6 +34,7 @@ type RoomState = {
   };
   seats: PublicSeat[];
   snapshot: Snapshot | null;
+  computerGameSeed: number | null;
   isHost: boolean;
   yourColors: Color[];
   computerColors: Color[];
@@ -45,7 +53,8 @@ export function OnlinePlay(props: { onBack: () => void }) {
   const [joinedCode, setJoinedCode] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState(getStoredName);
   const [mode, setMode] = useState<Mode>("twoPlayer");
-  const [difficulty, setDifficulty] = useState<Difficulty>("navigator");
+  const [strength, setStrength] = useState<Strength>("navigator");
+  const [style, setStyle] = useState<OpponentStyle>("balanced");
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const claimingLeaseRef = useRef(false);
@@ -53,6 +62,7 @@ export function OnlinePlay(props: { onBack: () => void }) {
   const createRoom = useMutation(api.rooms.createRoom);
   const joinSeat = useMutation(api.rooms.joinSeat);
   const assignComputer = useMutation(api.rooms.assignComputerSeat);
+  const updateComputerProfile = useMutation(api.rooms.updateComputerProfile);
   const leaveSeat = useMutation(api.rooms.leaveSeat);
   const heartbeat = useMutation(api.rooms.heartbeat);
   const claimComputerLease = useMutation(api.rooms.claimComputerLease);
@@ -85,6 +95,16 @@ export function OnlinePlay(props: { onBack: () => void }) {
   const snapshot = state?.snapshot ?? null;
   const acting = snapshot ? controllerForTurn(snapshot) : null;
   const computerLease = state?.computerLease ?? null;
+  const computerSeat = state?.seats.find((seat) => seat.kind === "computer") ?? null;
+
+  useEffect(() => {
+    if (computerSeat?.strength) {
+      setStrength(computerSeat.strength);
+    }
+    if (computerSeat?.style) {
+      setStyle(computerSeat.style);
+    }
+  }, [computerSeat?.strength, computerSeat?.style]);
   const computerEnabled = Boolean(
     snapshot &&
       acting &&
@@ -148,6 +168,7 @@ export function OnlinePlay(props: { onBack: () => void }) {
         move,
         color: acting,
         computerLeaseEpoch: operation ? computerLease?.epoch : undefined,
+        computerProfileRevision: operation?.profileRevision,
       });
       setError(null);
     } catch (cause) {
@@ -156,8 +177,9 @@ export function OnlinePlay(props: { onBack: () => void }) {
     }
   };
 
-  const computerDifficulty =
-    state?.seats.find((seat) => seat.kind === "computer")?.difficulty ?? difficulty;
+  const computerStrength = computerSeat?.strength ?? strength;
+  const computerStyle = computerSeat?.style ?? style;
+  const computerProfileRevision = computerSeat?.profileRevision ?? 0;
 
   const computer = useComputerTurn({
     snapshot,
@@ -165,11 +187,11 @@ export function OnlinePlay(props: { onBack: () => void }) {
     enabled: computerEnabled,
     turnKey:
       computerEnabled && state?.room.activeGameId
-        ? `${state.room.activeGameId}:${snapshot?.ply ?? -1}:${acting ?? "none"}`
+        ? `${state.room.activeGameId}:profile:${computerProfileRevision}:${snapshot?.ply ?? -1}:${acting ?? "none"}`
         : null,
-    profile: { strength: computerDifficulty, style: "balanced" },
-    gameSeed: 0,
-    profileRevision: 0,
+    profile: { strength: computerStrength, style: computerStyle },
+    gameSeed: state?.computerGameSeed ?? 0,
+    profileRevision: computerProfileRevision,
     onMove: commit,
     onError: setError,
   });
@@ -308,9 +330,12 @@ export function OnlinePlay(props: { onBack: () => void }) {
             state={state}
             joinedCode={joinedCode}
             sessionId={sessionId}
-            difficulty={difficulty}
-            setDifficulty={setDifficulty}
+            strength={strength}
+            setStrength={setStrength}
+            style={style}
+            setStyle={setStyle}
             assignComputer={assignComputer}
+            updateComputerProfile={updateComputerProfile}
             startGame={startGame}
             rematch={rematch}
             onLeave={leave}
@@ -323,9 +348,12 @@ export function OnlinePlay(props: { onBack: () => void }) {
             state={state}
             joinedCode={joinedCode}
             sessionId={sessionId}
-            difficulty={difficulty}
-            setDifficulty={setDifficulty}
+            strength={strength}
+            setStrength={setStrength}
+            style={style}
+            setStyle={setStyle}
             assignComputer={assignComputer}
+            updateComputerProfile={updateComputerProfile}
             startGame={startGame}
             rematch={rematch}
             onLeave={leave}
@@ -360,19 +388,53 @@ function RoomChrome(props: {
   state: RoomState;
   joinedCode: string;
   sessionId: string;
-  difficulty: Difficulty;
-  setDifficulty: (value: Difficulty) => void;
+  strength: Strength;
+  setStrength: (value: Strength) => void;
+  style: OpponentStyle;
+  setStyle: (value: OpponentStyle) => void;
   assignComputer: (args: {
     code: string;
     hostSessionId: string;
     color: Color;
-    difficulty: Difficulty;
+    strength: Strength;
+    style: OpponentStyle;
+  }) => Promise<unknown>;
+  updateComputerProfile: (args: {
+    code: string;
+    hostSessionId: string;
+    color: Color;
+    strength: Strength;
+    style: OpponentStyle;
+    expectedRevision: number;
   }) => Promise<unknown>;
   startGame: (args: { code: string; hostSessionId: string }) => Promise<unknown>;
   rematch: (args: { code: string; hostSessionId: string }) => Promise<unknown>;
   onLeave: () => void;
   onError: (message: string) => void;
 }) {
+  const computer = props.state.seats.find((seat) => seat.kind === "computer") ?? null;
+  const saveComputerProfile = (): void => {
+    const operation = computer
+      ? props.updateComputerProfile({
+          code: props.joinedCode,
+          hostSessionId: props.sessionId,
+          color: computer.color,
+          strength: props.strength,
+          style: props.style,
+          expectedRevision: computer.profileRevision,
+        })
+      : props.assignComputer({
+          code: props.joinedCode,
+          hostSessionId: props.sessionId,
+          color: "coral",
+          strength: props.strength,
+          style: props.style,
+        });
+    void operation.catch((cause: unknown) =>
+      props.onError(cause instanceof Error ? cause.message : "computer profile failed"),
+    );
+  };
+
   return (
     <>
       <button type="button" className="ghost" onClick={props.onLeave}>
@@ -388,45 +450,54 @@ function RoomChrome(props: {
           <li key={seat.color}>
             <strong>{seat.color}</strong>{" "}
             {seat.occupied
-              ? `${seat.displayName}${seat.kind === "computer" ? " (computer)" : ""}`
+              ? `${seat.displayName}${
+                  seat.kind === "computer" && seat.strength && seat.style
+                    ? ` (computer · ${styleLabel(seat.strength)} · ${styleLabel(seat.style)})`
+                    : ""
+                }`
               : seat.stale
                 ? "stale — claimable"
                 : "open"}
           </li>
         ))}
       </ul>
+      {props.state.isHost && props.state.room.mode === "twoPlayer" ? (
+        <section className="online-computer-settings">
+          <p className="eyebrow">Computer profile</p>
+          <div className="row">
+            <label>
+              Strength
+              <select
+                value={props.strength}
+                onChange={(event) => props.setStrength(event.target.value as Strength)}
+              >
+                {STRENGTHS.map((option) => (
+                  <option key={option} value={option}>{styleLabel(option)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Style
+              <select
+                value={props.style}
+                onChange={(event) => props.setStyle(event.target.value as OpponentStyle)}
+              >
+                {OPPONENT_STYLES.map((option) => (
+                  <option key={option} value={option}>{styleLabel(option)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <button type="button" onClick={saveComputerProfile}>
+            {computer ? "Apply opponent changes" : "Seat computer as Coral"}
+          </button>
+          {computer ? (
+            <p className="hint">Revision {computer.profileRevision}. Changes apply to the next computer decision.</p>
+          ) : null}
+        </section>
+      ) : null}
       {props.state.room.status === "lobby" && props.state.isHost ? (
         <div className="row">
-          {props.state.room.mode === "twoPlayer" ? (
-            <>
-              <select
-                value={props.difficulty}
-                onChange={(event) => props.setDifficulty(event.target.value as Difficulty)}
-              >
-                <option value="cadet">Cadet</option>
-                <option value="navigator">Navigator</option>
-                <option value="commander">Commander</option>
-                <option value="strategist">Strategist</option>
-              </select>
-              <button
-                type="button"
-                onClick={() =>
-                  void props
-                    .assignComputer({
-                      code: props.joinedCode,
-                      hostSessionId: props.sessionId,
-                      color: "coral",
-                      difficulty: props.difficulty,
-                    })
-                    .catch((cause: unknown) =>
-                      props.onError(cause instanceof Error ? cause.message : "computer seat failed"),
-                    )
-                }
-              >
-                Seat computer as Coral
-              </button>
-            </>
-          ) : null}
           <button
             type="button"
             onClick={() =>
@@ -457,4 +528,8 @@ function RoomChrome(props: {
       ) : null}
     </>
   );
+}
+
+function styleLabel(value: Strength | OpponentStyle): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

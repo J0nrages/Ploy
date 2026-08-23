@@ -5,6 +5,7 @@ export type ComputerMoveOperation = {
   requestId: string;
   expectedPly: number;
   turnKey: string;
+  profileRevision: number;
 };
 
 export type PendingComputerMove = {
@@ -69,5 +70,12 @@ export async function searchComputerMove(args: {
 }
 
 export function isStaleTurnError(cause: unknown): boolean {
-  return cause instanceof Error && cause.message.toLowerCase().includes("stale expected ply");
+  if (!(cause instanceof Error)) {
+    return false;
+  }
+  const message = cause.message.toLowerCase();
+  return (
+    message.includes("stale expected ply") ||
+    message.includes("computer profile is not current")
+  );
 }

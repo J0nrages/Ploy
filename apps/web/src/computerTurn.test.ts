@@ -99,6 +99,7 @@ test("a failed acknowledgement retries the exact move and request id", async () 
       requestId: "stable-request",
       expectedPly: 0,
       turnKey: "game:0:green",
+      profileRevision: 4,
     },
   };
   const attempts: PendingComputerMove[] = [];
@@ -119,10 +120,12 @@ test("a failed acknowledgement retries the exact move and request id", async () 
 
   expect(attempts).toEqual([pending, pending]);
   expect(attempts[0]?.operation.requestId).toBe(attempts[1]?.operation.requestId);
+  expect(attempts[0]?.operation.profileRevision).toBe(4);
 });
 
-test("only stale-ply failures discard a pending result", () => {
+test("stale position or profile failures discard a pending result", () => {
   expect(isStaleTurnError(new Error("stale expected ply"))).toBe(true);
+  expect(isStaleTurnError(new Error("computer profile is not current"))).toBe(true);
   expect(isStaleTurnError(new Error("computer lease is not current"))).toBe(false);
   expect(isStaleTurnError("stale expected ply")).toBe(false);
 });

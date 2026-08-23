@@ -4,11 +4,14 @@ import {
   CODE_ALPHABET,
   canClaimSeat,
   colorAllowed,
+  computerProfileIsCurrent,
   computerDisplayName,
   neededColors,
+  nextProfileRevision,
   pickNextHost,
   publicSeat,
   randomCode,
+  randomGameSeed,
   validateDisplayName,
 } from "./identity";
 
@@ -43,7 +46,35 @@ test("public seats never expose session ids", () => {
   });
   expect(seat.occupied).toBe(true);
   expect(seat.stale).toBe(true);
+  expect(seat.strength).toBeNull();
+  expect(seat.style).toBeNull();
   expect(JSON.stringify(seat)).not.toContain("secret");
+});
+
+test("public computer profiles support legacy strength and revision defaults", () => {
+  const seat = publicSeat({
+    color: "coral",
+    displayName: "Navigator",
+    kind: "computer",
+    difficulty: "navigator",
+    sessionId: "secret-bot",
+    lastSeen: 1_000,
+    roomStatus: "active",
+    now: 1_000,
+  });
+  expect(seat.strength).toBe("navigator");
+  expect(seat.style).toBe("balanced");
+  expect(seat.profileRevision).toBe(0);
+  expect(randomGameSeed()).toBeGreaterThanOrEqual(0);
+});
+
+test("computer profile revisions reject obsolete searches", () => {
+  expect(nextProfileRevision(undefined, 0)).toBe(1);
+  expect(nextProfileRevision(3, 3)).toBe(4);
+  expect(() => nextProfileRevision(3, 2)).toThrow("computer profile revision is stale");
+  expect(computerProfileIsCurrent(3, 3)).toBe(true);
+  expect(computerProfileIsCurrent(3, 2)).toBe(false);
+  expect(computerProfileIsCurrent(undefined, undefined)).toBe(false);
 });
 
 test("stale lobby seats can be claimed and computer seats cannot", () => {

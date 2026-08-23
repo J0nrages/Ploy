@@ -5,6 +5,7 @@ type RoomsApi = {
   createRoom: FunctionReference<"mutation">;
   joinSeat: FunctionReference<"mutation">;
   assignComputerSeat: FunctionReference<"mutation">;
+  updateComputerProfile: FunctionReference<"mutation">;
   leaveSeat: FunctionReference<"mutation">;
   heartbeat: FunctionReference<"mutation">;
   claimComputerLease: FunctionReference<"mutation">;

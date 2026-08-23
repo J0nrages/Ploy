@@ -19,10 +19,10 @@ todos:
     status: completed
   - id: opponent-profiles
     content: Separate opponent strength from bounded playing style and support revisioned mid-game changes locally and online.
-    status: in_progress
+    status: completed
   - id: adaptive-strength
     content: Add optional deterministic adaptive strength from balanced referee analysis of qualifying human moves.
-    status: pending
+    status: in_progress
   - id: clients
     content: Build the shared board UI, web app, Tauri shell, and anonymous Convex rooms.
     status: in_progress

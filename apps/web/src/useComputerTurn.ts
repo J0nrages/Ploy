@@ -107,6 +107,7 @@ export function useComputerTurn(args: {
               requestId: newRequestId(),
               expectedPly: snapshot.ply,
               turnKey,
+              profileRevision: args.profileRevision,
             },
           };
           pendingRef.current = pending;

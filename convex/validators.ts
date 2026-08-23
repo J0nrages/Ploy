@@ -19,6 +19,15 @@ export const difficultyValidator = v.union(
   v.literal("commander"),
   v.literal("strategist"),
 );
+export const strengthValidator = difficultyValidator;
+
+export const opponentStyleValidator = v.union(
+  v.literal("balanced"),
+  v.literal("aggressor"),
+  v.literal("guardian"),
+  v.literal("maneuverer"),
+  v.literal("trickster"),
+);
 
 export const seatKindValidator = v.union(v.literal("human"), v.literal("computer"));
 
@@ -76,7 +85,9 @@ export const publicSeatValidator = v.object({
   color: colorValidator,
   displayName: v.string(),
   kind: seatKindValidator,
-  difficulty: v.union(difficultyValidator, v.null()),
+  strength: v.union(strengthValidator, v.null()),
+  style: v.union(opponentStyleValidator, v.null()),
+  profileRevision: v.number(),
   occupied: v.boolean(),
   stale: v.boolean(),
 });
@@ -93,6 +104,7 @@ export const roomStateValidator = v.object({
   room: publicRoomValidator,
   seats: v.array(publicSeatValidator),
   snapshot: v.union(snapshotValidator, v.null()),
+  computerGameSeed: v.union(v.number(), v.null()),
   isHost: v.boolean(),
   yourColors: v.array(colorValidator),
   computerColors: v.array(colorValidator),
