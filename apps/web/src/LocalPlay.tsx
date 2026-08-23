@@ -404,7 +404,14 @@ export function LocalPlay(props: { onBack: () => void }) {
             : "Auto-save unavailable — keep this tab open"}
         </p>
         {showRules ? <RulesHelp onClose={() => setShowRules(false)} /> : null}
-        <p className="hint">{moveHint(acting, legalCount, interaction.selected !== null)}</p>
+        <p className="hint">
+          {moveHint(
+            acting,
+            legalCount,
+            interaction.selected !== null,
+            interaction.staging !== null,
+          )}
+        </p>
       </PlayHud>
       <div className="board-wrap">
         <PloyBoard
@@ -461,12 +468,20 @@ function formatSavedTime(timestamp: number): string {
   }).format(timestamp);
 }
 
-function moveHint(acting: Color | null, legalCount: number, selected: boolean): string {
+function moveHint(
+  acting: Color | null,
+  legalCount: number,
+  selected: boolean,
+  staging: boolean,
+): string {
   if (!acting) {
     return "The game is complete. Open the game menu to start another.";
   }
+  if (staging) {
+    return "Hover a nearby point to preview facing. Click the blue point or the matching tray rotation to finish. Press Escape to cancel.";
+  }
   if (selected) {
-    return "Choose a glowing destination or a rotation. Press Escape to cancel.";
+    return "Hover a nearby reachable point: blue if you can move there, red if not. Facing follows the cursor. Press Escape to cancel.";
   }
   return `Select a ${colorName(acting)} piece to move or rotate. ${legalCount} legal choices available.`;
 }

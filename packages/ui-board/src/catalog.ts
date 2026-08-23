@@ -82,12 +82,7 @@ export function projectedRoutes(
   const mask = ((base << rotation) | (base >> (8 - rotation))) & 0xff;
   const originRank = Math.floor(origin / 9);
   const originFile = origin % 9;
-  const distance =
-    piece.kind === "commander" || piece.kind === "shield"
-      ? 1
-      : piece.kind === "probe"
-        ? 2
-        : 3;
+  const distance = moveRange(piece);
 
   return DIRECTION_DELTAS.flatMap(([rankDelta, fileDelta], direction) => {
     if ((mask & (1 << direction)) === 0) {
@@ -133,8 +128,88 @@ export function fileRank(square: number): string {
   return `${FILE_LABELS[square % 9] ?? "?"}${Math.floor(square / 9) + 1}`;
 }
 
+export function moveRange(piece: Piece): number {
+  if (piece.kind === "commander" || piece.kind === "shield") {
+    return 1;
+  }
+  if (piece.kind === "probe") {
+    return 2;
+  }
+  return 3;
+}
+
+export function chebyshevDistance(from: Square, to: Square): number {
+  return Math.max(
+    Math.abs(Math.floor(from / 9) - Math.floor(to / 9)),
+    Math.abs((from % 9) - (to % 9)),
+  );
+}
+
+export function isRayAligned(from: Square, to: Square): boolean {
+  if (from === to) {
+    return false;
+  }
+  const rankDelta = Math.floor(to / 9) - Math.floor(from / 9);
+  const fileDelta = (to % 9) - (from % 9);
+  return rankDelta === 0 || fileDelta === 0 || Math.abs(rankDelta) === Math.abs(fileDelta);
+}
+
+const HOVER_REACH = 2;
+
+export function inFacingHoverRange(origin: Square, hovered: Square, piece: Piece): boolean {
+  const distance = chebyshevDistance(origin, hovered);
+  const reach = Math.min(HOVER_REACH, moveRange(piece));
+  return (
+    distance >= 1 &&
+    distance <= reach &&
+    isRayAligned(origin, hovered)
+  );
+}
+
 export function toWorld(rank: number, file: number): [number, number, number] {
   return [file - 4, 0, 4 - rank];
+}
+
+export function worldToSquare(
+  x: number,
+  z: number,
+  maxDistance = 0.52,
+): Square | null {
+  const file = Math.round(x + 4);
+  const rank = Math.round(4 - z);
+  if (rank < 0 || rank > 8 || file < 0 || file > 8) {
+    return null;
+  }
+  const [worldX, , worldZ] = toWorld(rank, file);
+  if (Math.hypot(x - worldX, z - worldZ) > maxDistance) {
+    return null;
+  }
+  return rank * 9 + file;
+}
+
+export function compassDirection(rankDelta: number, fileDelta: number): number {
+  if (rankDelta === 0 && fileDelta === 0) {
+    return 0;
+  }
+  return (
+    (Math.round(Math.atan2(fileDelta, rankDelta) / (Math.PI / 4)) + 8) % 8
+  );
+}
+
+export function rotationStepsToward(
+  from: Square,
+  to: Square,
+  rot: number,
+): 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | null {
+  if (from === to) {
+    return null;
+  }
+  const fromRank = Math.floor(from / 9);
+  const fromFile = from % 9;
+  const toRank = Math.floor(to / 9);
+  const toFile = to % 9;
+  const direction = compassDirection(toRank - fromRank, toFile - fromFile);
+  return ((direction - (rot % 8) + 8) % 8) as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 }
 
 /**

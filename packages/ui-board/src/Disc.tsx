@@ -212,6 +212,7 @@ export function Disc({
   invalidAttempt = 0,
   previewRotationSteps = null,
   onSelect,
+  onHover,
 }: {
   piece: Piece;
   rank: number;
@@ -220,6 +221,7 @@ export function Disc({
   invalidAttempt?: number;
   previewRotationSteps?: RotationSteps | null;
   onSelect: () => void;
+  onHover?: () => void;
 }) {
   const flags = baseMask(piece);
   const position = toWorld(rank, file);
@@ -301,6 +303,10 @@ export function Disc({
     <group
       ref={group}
       scale={PIECE_SCALE}
+      onPointerOver={(event) => {
+        event.stopPropagation();
+        onHover?.();
+      }}
       onClick={(event) => {
         event.stopPropagation();
         onSelect();

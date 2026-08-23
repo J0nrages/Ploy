@@ -2,13 +2,20 @@ import { expect, test } from "bun:test";
 import {
   directionYaw,
   fileRank,
+  inFacingHoverRange,
   mixHex,
   projectedRoutes,
+  rotationStepsToward,
   squareAfterArrow,
+  worldToSquare,
+  moveRange,
 } from "./catalog";
 import {
+  destinationHover,
   isSelectablePiece,
   motionWithoutRotation,
+  movesFrom,
+  pieceAt,
   shouldStageShield,
 } from "./interaction";
 import { createGame, initializeRules, legalMoves, type Move, type Piece } from "@ploy/rules";
@@ -137,4 +144,163 @@ test("shield staging is required when a post-move rotation exists", () => {
   ];
   expect(shouldStageShield(shield, motions)).toBe(true);
   expect(motionWithoutRotation(motions)?.postMoveSteps).toBeUndefined();
+});
+
+test("worldToSquare snaps nearby pointers onto the 9x9 graph", () => {
+  expect(worldToSquare(0, 0)).toBe(40);
+  expect(worldToSquare(0.4, 0)).toBe(40);
+  expect(worldToSquare(1, 0)).toBe(41);
+  expect(worldToSquare(-4, 4)).toBe(0);
+  expect(worldToSquare(10, 0)).toBeNull();
+});
+
+test("destination hover only previews legal moves and nearby reachable squares", async () => {
+  await initializeRules();
+  const snapshot = createGame("twoPlayer");
+  const motion = legalMoves(snapshot, "green").find(
+    (move): move is Extract<Move, { type: "motion" }> => move.type === "motion",
+  );
+  if (!motion) {
+    throw new Error("Opening green position has no motion");
+  }
+  const selectedMoves = movesFrom(snapshot, "green", motion.from);
+  const destinations = new Set(
+    selectedMoves.flatMap((move) => (move.type === "motion" ? [move.to] : [])),
+  );
+  const piece = pieceAt(snapshot, motion.from);
+  if (!piece) {
+    throw new Error("Opening motion is missing a piece");
+  }
+  const reach = Math.min(2, moveRange(piece));
+  const nearbyIllegal = [...Array(81).keys()].find((square) => {
+    const rankDelta = Math.abs(Math.floor(square / 9) - Math.floor(motion.from / 9));
+    const fileDelta = Math.abs((square % 9) - (motion.from % 9));
+    const distance = Math.max(rankDelta, fileDelta);
+    return (
+      square !== motion.from &&
+      !destinations.has(square) &&
+      pieceAt(snapshot, square) === null &&
+      distance >= 1 &&
+      distance <= reach &&
+      (rankDelta === 0 || fileDelta === 0 || rankDelta === fileDelta)
+    );
+  });
+  const farEmpty = [...Array(81).keys()].find((square) => {
+    const rankDelta = Math.abs(Math.floor(square / 9) - Math.floor(motion.from / 9));
+    const fileDelta = Math.abs((square % 9) - (motion.from % 9));
+    return (
+      pieceAt(snapshot, square) === null &&
+      !destinations.has(square) &&
+      Math.max(rankDelta, fileDelta) > 2
+    );
+  });
+  const otherGreen = snapshot.board
+    .flat()
+    .findIndex((item, square) => item?.controller === "green" && square !== motion.from);
+  if (nearbyIllegal === undefined || farEmpty === undefined || otherGreen < 0) {
+    throw new Error("Opening position is missing hover fixtures");
+  }
+
+  expect(
+    destinationHover({
+      snapshot,
+      actingColor: "green",
+      selected: null,
+      staging: null,
+      selectedMoves,
+      hovered: motion.to,
+    }),
+  ).toBeNull();
+  expect(
+    destinationHover({
+      snapshot,
+      actingColor: "green",
+      selected: motion.from,
+      staging: null,
+      selectedMoves,
+      hovered: motion.to,
+    }),
+  ).toBe("legal");
+  expect(
+    destinationHover({
+      snapshot,
+      actingColor: "green",
+      selected: motion.from,
+      staging: null,
+      selectedMoves,
+      hovered: nearbyIllegal,
+    }),
+  ).toBe("illegal");
+  expect(
+    destinationHover({
+      snapshot,
+      actingColor: "green",
+      selected: motion.from,
+      staging: null,
+      selectedMoves,
+      hovered: farEmpty,
+    }),
+  ).toBeNull();
+  expect(
+    destinationHover({
+      snapshot,
+      actingColor: "green",
+      selected: motion.from,
+      staging: null,
+      selectedMoves,
+      hovered: otherGreen,
+    }),
+  ).toBeNull();
+  expect(
+    destinationHover({
+      snapshot,
+      actingColor: "green",
+      selected: motion.from,
+      staging: null,
+      selectedMoves,
+      hovered: motion.from,
+    }),
+  ).toBeNull();
+});
+
+test("rotation preview turns the piece toward a hovered square", () => {
+  expect(rotationStepsToward(40, 49, 0)).toBe(0);
+  expect(rotationStepsToward(40, 41, 0)).toBe(2);
+  expect(rotationStepsToward(40, 41, 2)).toBe(0);
+  expect(rotationStepsToward(40, 40, 0)).toBeNull();
+});
+
+test("facing hover stays within two spaces of the acting piece", () => {
+  const shield: Piece = {
+    id: "green:shield1",
+    color: "green",
+    controller: "green",
+    kind: "shield",
+    rot: 0,
+  };
+  expect(inFacingHoverRange(40, 49, shield)).toBe(true);
+  expect(inFacingHoverRange(40, 58, shield)).toBe(false);
+  expect(inFacingHoverRange(40, 40, shield)).toBe(false);
+});
+
+test("destination hover is idle while a Shield move is staged", async () => {
+  await initializeRules();
+  const snapshot = createGame("twoPlayer");
+  const motion = legalMoves(snapshot, "green").find(
+    (move): move is Extract<Move, { type: "motion" }> => move.type === "motion",
+  );
+  if (!motion) {
+    throw new Error("Opening green position has no motion");
+  }
+  const selectedMoves = movesFrom(snapshot, "green", motion.from);
+  expect(
+    destinationHover({
+      snapshot,
+      actingColor: "green",
+      selected: motion.from,
+      staging: { from: motion.from, to: motion.to, motions: [motion] },
+      selectedMoves,
+      hovered: motion.to,
+    }),
+  ).toBeNull();
 });

@@ -105,14 +105,14 @@ export function PlayHud(props: {
         {props.error ? <p className="error">{props.error}</p> : null}
         {props.staging ? (
           <p className="hint">
-            <strong>Shield move selected at {fileRank(props.staging.to)}.</strong> Finish this same
-            turn in the orientation tray, or cancel below.
+            <strong>Shield move selected at {fileRank(props.staging.to)}.</strong> Hover a nearby
+            point to preview facing, then click it or a tray rotation to finish this turn.
           </p>
         ) : selectedPiece && hasMotion && hasRotation ? (
           <p className="hint">
             {selectedPiece.kind === "shield"
               ? "Shield: move and optionally rotate as one turn, or rotate here without moving."
-              : "Choose one action: move to a gold point or rotate this piece in place."}
+              : "Hover a point to preview it, then move to a gold point or rotate this piece in place."}
           </p>
         ) : selectedPiece ? (
           <p className="hint">Move and rotation choices are in the tray above or below the board.</p>

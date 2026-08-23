@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { legalMoves, type Color, type Move, type Piece, type Snapshot, type Square } from "@ploy/rules";
-import { squareAfterArrow } from "./catalog";
+import { inFacingHoverRange, rotationStepsToward, squareAfterArrow } from "./catalog";
 
 export type ShieldStaging = {
   from: Square;
@@ -36,6 +36,40 @@ export function motionsTo(
   return moves.filter(
     (move): move is Extract<Move, { type: "motion" }> => move.type === "motion" && move.to === to,
   );
+}
+
+export type DestinationHover = "legal" | "illegal";
+
+export function destinationHover(args: {
+  snapshot: Snapshot;
+  actingColor: Color;
+  selected: Square | null;
+  staging: ShieldStaging | null;
+  selectedMoves: Move[];
+  hovered: Square | null;
+}): DestinationHover | null {
+  if (
+    args.hovered === null ||
+    args.selected === null ||
+    args.staging !== null ||
+    args.hovered === args.selected
+  ) {
+    return null;
+  }
+  if (isSelectablePiece(args.snapshot, args.actingColor, args.hovered)) {
+    return null;
+  }
+  if (motionsTo(args.selectedMoves, args.hovered).length > 0) {
+    return "legal";
+  }
+  const piece = pieceAt(args.snapshot, args.selected);
+  if (!piece) {
+    return null;
+  }
+  if (!inFacingHoverRange(args.selected, args.hovered, piece)) {
+    return null;
+  }
+  return "illegal";
 }
 
 export function shouldStageShield(
@@ -101,7 +135,16 @@ export function useBoardInteraction(args: {
       return;
     }
     if (staging) {
-      setInvalidAttempt((attempt) => attempt + 1);
+      const piece = pieceAt(args.snapshot, staging.from);
+      if (!piece || !inFacingHoverRange(staging.to, square, piece)) {
+        return;
+      }
+      const steps = rotationStepsToward(staging.to, square, piece.rot);
+      if (steps === null || steps === 0) {
+        commitStaging();
+        return;
+      }
+      commitStaging(steps);
       return;
     }
     const motions = motionsTo(selectedMoves, square);
@@ -116,7 +159,9 @@ export function useBoardInteraction(args: {
       return;
     }
     if (!isSelectablePiece(args.snapshot, args.actingColor, square)) {
-      setInvalidAttempt((attempt) => attempt + 1);
+      if (selected !== null) {
+        setInvalidAttempt((attempt) => attempt + 1);
+      }
       return;
     }
     setInvalidAttempt(0);

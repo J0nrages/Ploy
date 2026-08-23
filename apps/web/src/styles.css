@@ -708,6 +708,12 @@ fieldset legend {
   min-width: 0;
 }
 
+.piece-control-messages {
+  block-size: 5.5em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .piece-controls-heading {
   display: flex;
   align-items: center;
@@ -784,10 +790,16 @@ fieldset legend {
 }
 
 .orientation-choice:hover,
-.orientation-choice:focus-visible {
+.orientation-choice:focus-visible,
+.orientation-choice.is-previewing {
   background: rgba(91, 46, 126, 0.8);
   border-color: #f4d35e;
   transform: translateY(-1px);
+}
+
+.orientation-choice.is-previewing {
+  border-color: #4cc9f0;
+  box-shadow: 0 0 0.75rem rgba(76, 201, 240, 0.45);
 }
 
 .orientation-choice.keep-facing {
@@ -871,6 +883,10 @@ fieldset legend {
 
   .piece-controls-copy {
     align-self: start;
+  }
+
+  .piece-control-messages {
+    block-size: 6.5rem;
   }
 
   .piece-controls-heading strong {

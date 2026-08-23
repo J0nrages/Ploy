@@ -48,7 +48,10 @@ export function RulesHelp(props: { onClose?: () => void }) {
       <h3>Board controls</h3>
       <ol>
         <li>Select one of the highlighted player’s pieces.</li>
-        <li>Select a glowing destination, or choose a rotation button.</li>
+        <li>
+          Hover a point to preview a move (blue if legal, red if not). Click a glowing destination,
+          or choose a rotation button.
+        </li>
         <li>For a Shield move, choose its new facing or keep its current facing.</li>
       </ol>
       <p className="hint">

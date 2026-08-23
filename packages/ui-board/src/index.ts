@@ -5,12 +5,14 @@ export {
   type BoardProps,
   type ControlsPlacement,
 } from "./Board";
-export { fileRank, squareAfterArrow } from "./catalog";
+export { fileRank, inFacingHoverRange, rotationStepsToward, squareAfterArrow, worldToSquare } from "./catalog";
 export {
+  destinationHover,
   movesFrom,
   pieceAt,
   shouldStageShield,
   useBoardInteraction,
   type BoardInteraction,
+  type DestinationHover,
   type ShieldStaging,
 } from "./interaction";

@@ -1,10 +1,23 @@
 import { OrbitControls } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import type { Color, Move, Piece, Snapshot, Square } from "@ploy/rules";
-import { ARMY, baseMask, mixHex, projectedRoutes, toWorld } from "./catalog";
+import {
+  ARMY,
+  baseMask,
+  inFacingHoverRange,
+  mixHex,
+  projectedRoutes,
+  rotationStepsToward,
+  toWorld,
+  worldToSquare,
+} from "./catalog";
 import { Disc } from "./Disc";
-import type { ShieldStaging } from "./interaction";
+import {
+  destinationHover,
+  type DestinationHover,
+  type ShieldStaging,
+} from "./interaction";
 import { Starfield } from "./Starfield";
 
 export type ControlsPlacement = "top" | "bottom";
@@ -27,11 +40,31 @@ export type BoardProps = {
   onCancel: () => void;
 };
 
+const HOVER_COLORS = {
+  legal: { color: "#4cc9f0", emissive: "#4cc9f0", fill: "#b8f2ff" },
+  illegal: { color: "#ec625f", emissive: "#ff4d6d", fill: "#ffd0ce" },
+} as const;
+function squareFromPointer(event: ThreeEvent<MouseEvent | PointerEvent>): Square | null {
+  const directionY = event.ray.direction.y;
+  if (Math.abs(directionY) < Number.EPSILON) {
+    return null;
+  }
+  const distance = -event.ray.origin.y / directionY;
+  return worldToSquare(
+    event.ray.origin.x + event.ray.direction.x * distance,
+    event.ray.origin.z + event.ray.direction.z * distance,
+  );
+}
+
 function PathNetwork({
   targets,
+  hoveredSquare,
+  hoverKind,
   onSelectSquare,
 }: {
   targets: Set<Square>;
+  hoveredSquare: Square | null;
+  hoverKind: DestinationHover | null;
   onSelectSquare: (square: Square) => void;
 }) {
   return (
@@ -41,13 +74,23 @@ function PathNetwork({
           const square = rank * 9 + file;
           const [x, , z] = toWorld(rank, file);
           const hot = targets.has(square);
+          const hover = hoveredSquare === square ? hoverKind : null;
+          const radius = hover || hot ? 0.11 : 0.075;
+          const palette =
+            hover === "legal"
+              ? { color: HOVER_COLORS.legal.color, emissive: HOVER_COLORS.legal.emissive, intensity: 1.15 }
+              : hover === "illegal"
+                ? { color: HOVER_COLORS.illegal.color, emissive: HOVER_COLORS.illegal.emissive, intensity: 1.05 }
+                : hot
+                  ? { color: "#c77dff", emissive: "#9b5de5", intensity: 0.85 }
+                  : { color: "#5c4d7a", emissive: "#2a1244", intensity: 0.15 };
           return (
             <mesh key={`v-${square}`} position={[x, 0, z]} onClick={() => onSelectSquare(square)}>
-              <cylinderGeometry args={[hot ? 0.11 : 0.075, hot ? 0.11 : 0.075, 0.045, 16]} />
+              <cylinderGeometry args={[radius, radius, 0.045, 16]} />
               <meshStandardMaterial
-                color={hot ? "#c77dff" : "#5c4d7a"}
-                emissive={hot ? "#9b5de5" : "#2a1244"}
-                emissiveIntensity={hot ? 0.85 : 0.15}
+                color={palette.color}
+                emissive={palette.emissive}
+                emissiveIntensity={palette.intensity}
               />
             </mesh>
           );
@@ -122,10 +165,14 @@ function LegalRays({ legal, selected }: { legal: Move[]; selected: Square | null
 
 function MoveTargets({
   legal,
+  hoveredSquare,
   onSelectSquare,
+  onHoverSquare,
 }: {
   legal: Move[];
+  hoveredSquare: Square | null;
   onSelectSquare: (square: Square) => void;
+  onHoverSquare: (square: Square | null) => void;
 }) {
   const targets = useMemo(
     () =>
@@ -140,6 +187,9 @@ function MoveTargets({
   return (
     <group>
       {targets.map((square) => {
+        if (square === hoveredSquare) {
+          return null;
+        }
         const rank = Math.floor(square / 9);
         const file = square % 9;
         const [x, , z] = toWorld(rank, file);
@@ -147,6 +197,10 @@ function MoveTargets({
           <group
             key={`move-${square}`}
             position={[x, 0.09, z]}
+            onPointerOver={(event) => {
+              event.stopPropagation();
+              onHoverSquare(square);
+            }}
             onClick={(event) => {
               event.stopPropagation();
               onSelectSquare(square);
@@ -172,6 +226,95 @@ function MoveTargets({
         );
       })}
     </group>
+  );
+}
+
+function HoverDestination({
+  from,
+  to,
+  kind,
+}: {
+  from: Square;
+  to: Square;
+  kind: DestinationHover;
+}) {
+  const fromRank = Math.floor(from / 9);
+  const fromFile = from % 9;
+  const toRank = Math.floor(to / 9);
+  const toFile = to % 9;
+  const [x1, , z1] = toWorld(fromRank, fromFile);
+  const [x2, , z2] = toWorld(toRank, toFile);
+  const palette = HOVER_COLORS[kind];
+
+  return (
+    <group key={`${from}-${to}-${kind}`}>
+      <line>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[new Float32Array([x1, 0.2, z1, x2, 0.2, z2]), 3]}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color={palette.color} transparent opacity={0.92} />
+      </line>
+      <group position={[x2, 0.09, z2]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.13, 0.24, 24]} />
+          <meshStandardMaterial
+            color={palette.color}
+            emissive={palette.emissive}
+            emissiveIntensity={1.2}
+          />
+        </mesh>
+        <mesh position={[0, 0.015, 0]}>
+          <sphereGeometry args={[0.07, 16, 8]} />
+          <meshStandardMaterial
+            color={palette.fill}
+            emissive={palette.emissive}
+            emissiveIntensity={1.25}
+          />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+function BoardHoverSensor({
+  enabled,
+  onHoverSquare,
+  onSelectSquare,
+}: {
+  enabled: boolean;
+  onHoverSquare: (square: Square | null) => void;
+  onSelectSquare: (square: Square) => void;
+}) {
+  const squareFromEvent = (
+    event: ThreeEvent<MouseEvent | PointerEvent>,
+  ): Square | null =>
+    squareFromPointer(event);
+
+  return (
+    <mesh
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, 0.55, 0]}
+      onPointerMove={(event) => {
+        if (!enabled) {
+          onHoverSquare(null);
+          return;
+        }
+        onHoverSquare(squareFromEvent(event));
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        const square = squareFromEvent(event);
+        if (square !== null) {
+          onSelectSquare(square);
+        }
+      }}
+    >
+      <planeGeometry args={[10.5, 10.5]} />
+      <meshBasicMaterial transparent opacity={0.001} depthWrite={false} />
+    </mesh>
   );
 }
 
@@ -272,6 +415,8 @@ function PieceControls(props: {
   showPlacementControls: boolean;
   previewRotationSteps: RotationSteps | null;
   projectedMoveCount: number | null;
+  hoverKind: DestinationHover | null;
+  facingKeep: boolean;
   onPlacementChange: (placement: ControlsPlacement) => void;
   onCommitRotation: (steps: RotationSteps) => void;
   onCommitStaging: (postMoveSteps?: RotationSteps) => void;
@@ -296,33 +441,55 @@ function PieceControls(props: {
             ×
           </button>
         </div>
-        {props.invalidAttempt > 0 ? (
-          <p className="piece-control-error">That piece cannot move there. Choose a gold point.</p>
-        ) : null}
-        {props.staging ? (
-          <p>Move selected. Keep the current facing or choose the resulting ray pattern.</p>
-        ) : (
-          <p>
-            {props.piece.kind === "shield"
-              ? "Move to a gold point and optionally rotate, or rotate here without moving."
-              : hasMotion
-                ? "Choose one action: move to a gold point OR rotate here."
-                : "This piece cannot move from here. You can rotate it in place."}
-          </p>
-        )}
-        <p className={props.previewRotationSteps ? "orientation-guidance is-previewing" : "orientation-guidance"}>
-          {props.previewRotationSteps
-            ? props.projectedMoveCount === 0
-              ? "No projected move in this facing: its lane is blocked or points off the board."
-              : "Blue points are projected next-turn moves if the board stays unchanged."
-            : "Hover or focus a rotation to preview its next-turn movement lanes."}
-        </p>
+        <div className="piece-control-messages">
+          {props.invalidAttempt > 0 && !props.staging && props.hoverKind !== "illegal" ? (
+            <p className="piece-control-error">That piece cannot move there. Choose a gold point.</p>
+          ) : null}
+          {props.staging && (props.previewRotationSteps || props.facingKeep) ? (
+            <p className="orientation-guidance is-previewing">
+              {props.facingKeep
+                ? "Blue: keep this facing. Click the point or Keep facing to finish the turn."
+                : "Facing follows the cursor. Click the point or the highlighted rotation to finish."}
+            </p>
+          ) : props.hoverKind === "legal" ? (
+            <p className="orientation-guidance is-previewing">
+              Blue: this is a legal destination this turn. Click to move.
+            </p>
+          ) : props.hoverKind === "illegal" ? (
+            <p className="piece-control-error">
+              Red: this piece cannot move there this turn. Facing follows the cursor.
+            </p>
+          ) : props.staging ? (
+            <p>Move selected. Keep the current facing or choose the resulting ray pattern.</p>
+          ) : (
+            <p>
+              {props.piece.kind === "shield"
+                ? "Move to a gold point and optionally rotate, or rotate here without moving."
+                : hasMotion
+                  ? "Choose one action: move to a gold point OR rotate here."
+                  : "This piece cannot move from here. You can rotate it in place."}
+            </p>
+          )}
+          {props.hoverKind || (props.staging && (props.previewRotationSteps || props.facingKeep)) ? null : (
+            <p className={props.previewRotationSteps ? "orientation-guidance is-previewing" : "orientation-guidance"}>
+              {props.previewRotationSteps
+                ? props.projectedMoveCount === 0
+                  ? "No projected move in this facing: its lane is blocked or points off the board."
+                  : "Blue points are projected next-turn moves if the board stays unchanged."
+                : "Hover a nearby reachable point to preview a move, or a rotation to preview its next-turn lanes."}
+            </p>
+          )}
+        </div>
       </div>
       <div className="piece-control-actions">
         {props.staging ? (
           <button
             type="button"
-            className="orientation-choice keep-facing"
+            className={
+              props.facingKeep
+                ? "orientation-choice keep-facing is-previewing"
+                : "orientation-choice keep-facing"
+            }
             onPointerEnter={() => props.onPreviewRotation(null)}
             onFocus={() => props.onPreviewRotation(null)}
             onClick={() => props.onCommitStaging()}
@@ -337,7 +504,11 @@ function PieceControls(props: {
         {(props.staging ? stagedSteps : rotationSteps).map((steps) => (
           <button
             type="button"
-            className="orientation-choice"
+            className={
+              steps === props.previewRotationSteps
+                ? "orientation-choice is-previewing"
+                : "orientation-choice"
+            }
             key={steps}
             aria-label={rotationAriaLabel(props.piece, steps)}
             onPointerEnter={() => props.onPreviewRotation(steps)}
@@ -470,27 +641,30 @@ export function PloyBoard({
   onCommitStaging,
   onCancel,
 }: BoardProps) {
-  const [previewRotationSteps, setPreviewRotationSteps] = useState<
+  const [trayRotationSteps, setTrayRotationSteps] = useState<
     1 | 2 | 3 | 4 | 5 | 6 | 7 | null
   >(null);
+  const [hoveredSquare, setHoveredSquare] = useState<Square | null>(null);
   const [storedControlsPlacement, setStoredControlsPlacement] =
     useState<ControlsPlacement>(loadControlsPlacement);
   const controlsPlacement =
     controlledControlsPlacement ?? storedControlsPlacement;
 
   useEffect(() => {
-    setPreviewRotationSteps(null);
-  }, [selected, staging?.to, snapshot.ply]);
+    setTrayRotationSteps(null);
+    setHoveredSquare(null);
+  }, [selected, snapshot.ply]);
 
   const targets = useMemo(() => {
     const set = new Set<Square>();
+    if (staging) {
+      set.add(staging.to);
+      return set;
+    }
     for (const move of legal) {
       if (move.type === "motion") {
         set.add(move.to);
       }
-    }
-    if (staging) {
-      set.add(staging.to);
     }
     return set;
   }, [legal, staging]);
@@ -502,6 +676,41 @@ export function PloyBoard({
       : snapshot.board[Math.floor(sourceSquare / 9)]?.[sourceSquare % 9] ?? null;
   const actionPiece =
     selectedActionPiece?.controller === actingColor ? selectedActionPiece : null;
+  const hoverKind =
+    actingColor === null
+      ? null
+      : destinationHover({
+          snapshot,
+          actingColor,
+          selected,
+          staging,
+          selectedMoves: legal,
+          hovered: hoveredSquare,
+        });
+  const facingOrigin = actionSquare;
+  const facingHover =
+    facingOrigin !== null &&
+    hoveredSquare !== null &&
+    actionPiece !== null &&
+    inFacingHoverRange(facingOrigin, hoveredSquare, actionPiece);
+  const boardRotationSteps =
+    (hoverKind || facingHover) &&
+    facingOrigin !== null &&
+    hoveredSquare !== null &&
+    actionPiece
+      ? rotationStepsToward(facingOrigin, hoveredSquare, actionPiece.rot)
+      : null;
+  const facingKeep = Boolean(
+    staging &&
+      trayRotationSteps === null &&
+      facingHover &&
+      (boardRotationSteps === 0 || boardRotationSteps === null),
+  );
+  const pathHoverKind =
+    hoverKind ?? (staging && facingHover ? "legal" : null);
+  const previewRotationSteps =
+    trayRotationSteps ??
+    (boardRotationSteps && boardRotationSteps > 0 ? boardRotationSteps : null);
   const projectedMoveCount =
     previewRotationSteps && actionSquare !== null && actionPiece
       ? projectedRoutes(
@@ -528,10 +737,12 @@ export function PloyBoard({
       showPlacementControls={showPlacementControls}
       previewRotationSteps={previewRotationSteps}
       projectedMoveCount={projectedMoveCount}
+      hoverKind={hoverKind}
+      facingKeep={facingKeep}
       onPlacementChange={changeControlsPlacement}
       onCommitRotation={onCommitRotation}
       onCommitStaging={onCommitStaging}
-      onPreviewRotation={setPreviewRotationSteps}
+      onPreviewRotation={setTrayRotationSteps}
       onCancel={onCancel}
     />
   ) : null;
@@ -540,7 +751,11 @@ export function PloyBoard({
     <div className={`board-shell controls-${controlsPlacement}`}>
       {controlsPlacement === "top" ? controls : null}
       <div className="board-canvas">
-        <Canvas camera={{ position: [0, 12.5, 12.5], fov: 38 }}>
+        <Canvas
+          camera={{ position: [0, 12.5, 12.5], fov: 38 }}
+          onPointerLeave={() => setHoveredSquare(null)}
+          onPointerMissed={() => setHoveredSquare(null)}
+        >
       <color attach="background" args={["#070314"]} />
       <fog attach="fog" args={["#070314", 22, 55]} />
       <Starfield />
@@ -553,9 +768,35 @@ export function PloyBoard({
         <circleGeometry args={[7.4, 64]} />
         <meshStandardMaterial color="#1a0c2c" metalness={0.15} roughness={0.7} />
       </mesh>
-      <PathNetwork targets={targets} onSelectSquare={onSelectSquare} />
-      <LegalRays legal={legal} selected={selected} />
-      {staging ? null : <MoveTargets legal={legal} onSelectSquare={onSelectSquare} />}
+      <PathNetwork
+        targets={targets}
+        hoveredSquare={hoveredSquare}
+        hoverKind={pathHoverKind}
+        onSelectSquare={onSelectSquare}
+      />
+      <BoardHoverSensor
+        enabled={selected !== null}
+        onHoverSquare={setHoveredSquare}
+        onSelectSquare={onSelectSquare}
+      />
+      {staging ? null : <LegalRays legal={legal} selected={selected} />}
+      {staging ? null : (
+        <MoveTargets
+          legal={legal}
+          hoveredSquare={hoverKind ? hoveredSquare : null}
+          onSelectSquare={onSelectSquare}
+          onHoverSquare={setHoveredSquare}
+        />
+      )}
+      {hoverKind && selected !== null && hoveredSquare !== null ? (
+        <HoverDestination from={selected} to={hoveredSquare} kind={hoverKind} />
+      ) : staging &&
+        facingHover &&
+        trayRotationSteps === null &&
+        actionSquare !== null &&
+        hoveredSquare !== null ? (
+        <HoverDestination from={actionSquare} to={hoveredSquare} kind="legal" />
+      ) : null}
       {previewRotationSteps && actionSquare !== null && actionPiece ? (
         <OrientationProjection
           snapshot={snapshot}
@@ -586,6 +827,9 @@ export function PloyBoard({
                 selected === square ? previewRotationSteps : null
               }
               onSelect={() => onSelectSquare(square)}
+              onHover={() =>
+                setHoveredSquare(staging?.from === square ? staging.to : square)
+              }
             />,
           ];
         }),
