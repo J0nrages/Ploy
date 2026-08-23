@@ -4,7 +4,7 @@ use std::alloc::{alloc, dealloc, Layout};
 use std::ptr;
 use std::slice;
 
-use ploy_core::{Color, ErrorBody, Mode, Move, RulesError, Snapshot};
+use ploy_core::{Color, ErrorBody, Mode, Move, OpponentStyle, RulesError, Snapshot};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -63,6 +63,19 @@ struct MoveRequest {
 struct ChooseMoveRequest {
     snapshot: Snapshot,
     color: Color,
+    max_depth: Option<u32>,
+    max_nodes: u64,
+    random_seed: u32,
+    style: Option<OpponentStyle>,
+    max_score_loss: Option<i32>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReviewMoveRequest {
+    snapshot: Snapshot,
+    color: Color,
+    played_move: Move,
     max_depth: Option<u32>,
     max_nodes: u64,
     random_seed: u32,
@@ -218,10 +231,26 @@ pub extern "C" fn apply_move(ptr: u32, len: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn choose_move(ptr: u32, len: u32) -> u32 {
     handle(ptr, len, |request: ChooseMoveRequest| {
-        ploy_core::choose_move(
+        ploy_core::choose_move_with_profile(
             &request.snapshot,
             request.color,
             request.max_depth.unwrap_or(2),
+            request.max_nodes,
+            request.random_seed,
+            request.style.unwrap_or(OpponentStyle::Balanced),
+            request.max_score_loss.unwrap_or(12),
+        )
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn review_move(ptr: u32, len: u32) -> u32 {
+    handle(ptr, len, |request: ReviewMoveRequest| {
+        ploy_core::review_move(
+            &request.snapshot,
+            request.color,
+            &request.played_move,
+            request.max_depth.unwrap_or(3),
             request.max_nodes,
             request.random_seed,
         )

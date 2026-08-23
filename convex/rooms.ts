@@ -27,6 +27,7 @@ import {
   colorAllowed,
   computerDisplayName,
   neededColors,
+  nextProfileRevision,
   pickNextHost,
   publicSeat,
   randomCode,
@@ -34,10 +35,11 @@ import {
 } from "./lib/identity";
 import {
   colorValidator,
-  difficultyValidator,
   modeValidator,
+  opponentStyleValidator,
   publicRoomValidator,
   roomStateValidator,
+  strengthValidator,
 } from "./validators";
 
 function publicRoom(room: Doc<"rooms">) {
@@ -166,7 +168,8 @@ export const assignComputerSeat = mutation({
     code: v.string(),
     hostSessionId: v.string(),
     color: colorValidator,
-    difficulty: difficultyValidator,
+    strength: strengthValidator,
+    style: opponentStyleValidator,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -194,7 +197,7 @@ export const assignComputerSeat = mutation({
       .query("seats")
       .withIndex("by_room_and_color", (q) => q.eq("roomId", room._id).eq("color", args.color))
       .unique();
-    const displayName = computerDisplayName(args.difficulty);
+    const displayName = computerDisplayName(args.strength);
     if (!existing) {
       await ctx.db.insert("seats", {
         roomId: room._id,
@@ -202,7 +205,9 @@ export const assignComputerSeat = mutation({
         sessionId: args.hostSessionId,
         displayName,
         kind: "computer",
-        difficulty: args.difficulty,
+        strength: args.strength,
+        style: args.style,
+        profileRevision: 0,
         leaseOwnerSessionId: args.hostSessionId,
         leaseExpiresAt: now + COMPUTER_LEASE_MS,
         leaseEpoch: 1,
@@ -218,13 +223,57 @@ export const assignComputerSeat = mutation({
       sessionId: args.hostSessionId,
       displayName,
       kind: "computer",
-      difficulty: args.difficulty,
+      strength: args.strength,
+      style: args.style,
+      profileRevision: (existing.profileRevision ?? 0) + 1,
       leaseOwnerSessionId: args.hostSessionId,
       leaseExpiresAt: now + COMPUTER_LEASE_MS,
       leaseEpoch: (existing.leaseEpoch ?? 0) + 1,
       lastSeen: now,
     });
     return null;
+  },
+});
+
+export const updateComputerProfile = mutation({
+  args: {
+    code: v.string(),
+    hostSessionId: v.string(),
+    color: colorValidator,
+    strength: strengthValidator,
+    style: opponentStyleValidator,
+    expectedRevision: v.number(),
+  },
+  returns: v.object({ revision: v.number() }),
+  handler: async (ctx, args) => {
+    const room = await ctx.db
+      .query("rooms")
+      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .unique();
+    if (!room) {
+      throw new Error("Room not found");
+    }
+    if (room.hostSessionId !== args.hostSessionId) {
+      throw new Error("Only the host may change the computer profile");
+    }
+    const computer = await ctx.db
+      .query("seats")
+      .withIndex("by_room_and_color", (q) =>
+        q.eq("roomId", room._id).eq("color", args.color),
+      )
+      .unique();
+    if (!computer || computer.kind !== "computer") {
+      throw new Error("Computer seat not found");
+    }
+    const revision = nextProfileRevision(computer.profileRevision, args.expectedRevision);
+    await ctx.db.patch(computer._id, {
+      displayName: computerDisplayName(args.strength),
+      strength: args.strength,
+      style: args.style,
+      profileRevision: revision,
+      lastSeen: Date.now(),
+    });
+    return { revision };
   },
 });
 
@@ -405,7 +454,9 @@ export const getRoomState = query({
           color,
           displayName: "",
           kind: "human" as const,
-          difficulty: null,
+          strength: null,
+          style: null,
+          profileRevision: 0,
           occupied: false,
           stale: false,
         };
@@ -415,15 +466,17 @@ export const getRoomState = query({
         displayName: seat.displayName,
         kind: seat.kind,
         difficulty: seat.difficulty,
+        strength: seat.strength,
+        style: seat.style,
+        profileRevision: seat.profileRevision,
         sessionId: seat.sessionId,
         lastSeen: seat.lastSeen,
         roomStatus: room.status,
         now: args.now ?? 0,
       });
     });
-    const snapshot = room.activeGameId
-      ? await ctx.db.get(room.activeGameId).then((game) => (game ? parseSnapshot(game.snapshot) : null))
-      : null;
+    const game = room.activeGameId ? await ctx.db.get(room.activeGameId) : null;
+    const snapshot = game ? parseSnapshot(game.snapshot) : null;
     const sessionId = args.sessionId;
     const yourColors = sessionId
       ? seats.filter((seat) => seat.sessionId === sessionId).map((seat) => seat.color)
@@ -452,6 +505,7 @@ export const getRoomState = query({
       room: publicRoom(room),
       seats: publicSeats,
       snapshot,
+      computerGameSeed: game?.computerGameSeed ?? null,
       isHost: sessionId !== undefined && room.hostSessionId === sessionId,
       yourColors,
       computerColors,

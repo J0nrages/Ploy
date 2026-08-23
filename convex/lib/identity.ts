@@ -5,13 +5,22 @@ export const STALE_LOBBY_MS = 45_000;
 export const COMPUTER_LEASE_MS = 45_000;
 
 export type SeatKind = "human" | "computer";
-export type Difficulty = "cadet" | "navigator" | "commander" | "strategist";
+export type Strength = "cadet" | "navigator" | "commander" | "strategist";
+export type Difficulty = Strength;
+export type OpponentStyle =
+  | "balanced"
+  | "aggressor"
+  | "guardian"
+  | "maneuverer"
+  | "trickster";
 
 export type PublicSeat = {
   color: Color;
   displayName: string;
   kind: SeatKind;
-  difficulty: Difficulty | null;
+  strength: Strength | null;
+  style: OpponentStyle | null;
+  profileRevision: number;
   occupied: boolean;
   stale: boolean;
 };
@@ -32,9 +41,30 @@ export function validateDisplayName(name: string): string {
   return trimmed;
 }
 
-export function computerDisplayName(difficulty: Difficulty): string {
-  const label = difficulty[0]?.toUpperCase() + difficulty.slice(1);
+export function computerDisplayName(strength: Strength): string {
+  const label = strength[0]?.toUpperCase() + strength.slice(1);
   return label;
+}
+
+export function randomGameSeed(): number {
+  const values = new Uint32Array(1);
+  crypto.getRandomValues(values);
+  return values[0] ?? 0;
+}
+
+export function nextProfileRevision(current: number | undefined, expected: number): number {
+  const revision = current ?? 0;
+  if (revision !== expected) {
+    throw new Error("computer profile revision is stale");
+  }
+  return revision + 1;
+}
+
+export function computerProfileIsCurrent(
+  current: number | undefined,
+  submitted: number | undefined,
+): boolean {
+  return (current ?? 0) === submitted;
 }
 
 export function randomCode(): string {
@@ -52,6 +82,9 @@ export function publicSeat(args: {
   displayName: string;
   kind: SeatKind;
   difficulty?: Difficulty;
+  strength?: Strength;
+  style?: OpponentStyle;
+  profileRevision?: number;
   sessionId: string | null;
   lastSeen: number;
   roomStatus: "lobby" | "active" | "finished";
@@ -64,7 +97,10 @@ export function publicSeat(args: {
     color: args.color,
     displayName: args.displayName,
     kind: args.kind,
-    difficulty: args.difficulty ?? null,
+    strength: args.strength ?? args.difficulty ?? null,
+    style:
+      args.kind === "computer" ? (args.style ?? "balanced") : null,
+    profileRevision: args.kind === "computer" ? (args.profileRevision ?? 0) : 0,
     occupied,
     stale,
   };

@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Move } from "../packages/rules/src/types.ts";
 import { parseSnapshot } from "../packages/rules/src/parse.ts";
-import { neededColors, sameMove } from "./lib/identity";
+import {
+  computerProfileIsCurrent,
+  neededColors,
+  randomGameSeed,
+  sameMove,
+} from "./lib/identity";
 import { loadRules } from "./lib/rules";
 import { colorValidator, moveValidator, snapshotValidator } from "./validators";
 
@@ -80,6 +85,9 @@ export const startGame = mutation({
     const gameId = await ctx.db.insert("games", {
       roomId: room._id,
       snapshot,
+      ...(seats.some((seat) => seat.kind === "computer")
+        ? { computerGameSeed: randomGameSeed() }
+        : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -102,9 +110,16 @@ export const rematch = mutation({
     const api = await loadRules();
     const snapshot = api.createGame(room.mode);
     const now = Date.now();
+    const seats = await ctx.db
+      .query("seats")
+      .withIndex("by_room", (q) => q.eq("roomId", room._id))
+      .collect();
     const gameId = await ctx.db.insert("games", {
       roomId: room._id,
       snapshot,
+      ...(seats.some((seat) => seat.kind === "computer")
+        ? { computerGameSeed: randomGameSeed() }
+        : {}),
       createdAt: now,
       updatedAt: now,
     });
@@ -122,6 +137,7 @@ export const submitMove = mutation({
     move: moveValidator,
     color: colorValidator,
     computerLeaseEpoch: v.optional(v.number()),
+    computerProfileRevision: v.optional(v.number()),
   },
   returns: v.object({ ply: v.number() }),
   handler: async (ctx, args) => {
@@ -143,6 +159,7 @@ export const submitMove = mutation({
       if (
         prior.bySessionId !== args.sessionId ||
         prior.ply !== args.expectedPly ||
+        prior.computerProfileRevision !== args.computerProfileRevision ||
         !sameMove(prior.move, args.move)
       ) {
         throw new Error("requestId reused with different payload");
@@ -177,8 +194,14 @@ export const submitMove = mutation({
       ) {
         throw new Error("computer lease is not current");
       }
-    } else if (args.computerLeaseEpoch !== undefined) {
-      throw new Error("human moves must not include a computer lease");
+      if (!computerProfileIsCurrent(seat.profileRevision, args.computerProfileRevision)) {
+        throw new Error("computer profile is not current");
+      }
+    } else if (
+      args.computerLeaseEpoch !== undefined ||
+      args.computerProfileRevision !== undefined
+    ) {
+      throw new Error("human moves must not include computer authorization");
     }
     const next = api.applyMove(snapshot, asMove(args.move), args.color);
     await ctx.db.insert("moves", {
@@ -189,6 +212,9 @@ export const submitMove = mutation({
       byColor: args.color,
       bySessionId: args.sessionId,
       requestId: args.requestId,
+      ...(args.computerProfileRevision === undefined
+        ? {}
+        : { computerProfileRevision: args.computerProfileRevision }),
     });
     await ctx.db.patch(game._id, { snapshot: next, updatedAt: Date.now() });
     if (next.winner) {

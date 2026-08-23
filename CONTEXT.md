@@ -47,3 +47,35 @@ _Avoid_: Slide
 **Direction move**:
 A move that rotates a piece in place to a distinct resulting set of movement directions.
 _Avoid_: Motion, turn
+
+**Opponent strength**:
+The computer opponent's search accuracy and permitted controlled error.
+_Avoid_: Difficulty when referring to playing ability
+
+**Opponent style**:
+A stable preference among strategically close moves that never overrides a forced result or Commander safety.
+_Avoid_: Strength, personality
+
+**Opponent profile**:
+The combination of opponent strength and opponent style used for a computer seat.
+_Avoid_: Difficulty preset
+
+**Game seed**:
+A value fixed for one game that makes retries and resumed play repeatable while allowing different games to vary.
+_Avoid_: Random seed when game-level continuity matters
+
+**Profile revision**:
+The identity of the opponent profile currently authorized to choose the next computer move.
+_Avoid_: Lease epoch, ply
+
+**Adaptive strength**:
+An optional bounded adjustment of opponent strength based on several qualifying human moves.
+_Avoid_: Rubber-banding, adaptive style
+
+**Referee analysis**:
+A balanced assessment of a human move that is independent of the computer opponent's current strength and style.
+_Avoid_: Opponent search
+
+**Qualifying move**:
+A human move for which referee analysis has enough choice and confidence to inform adaptive strength.
+_Avoid_: Every human move

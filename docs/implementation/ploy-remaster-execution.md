@@ -14,12 +14,24 @@ todos:
   - id: opponent
     content: Implement deterministic node-bounded two-player lookahead in ploy-core and expose it through a Worker.
     status: completed
+  - id: opponent-foundation
+    content: Guarantee a scored fallback, retain safe interrupted-search results, and expose auditable search diagnostics.
+    status: completed
+  - id: opponent-profiles
+    content: Separate opponent strength from bounded playing style and support revisioned mid-game changes locally and online.
+    status: completed
+  - id: adaptive-strength
+    content: Add optional deterministic adaptive strength from balanced referee analysis of qualifying human moves.
+    status: completed
+  - id: opponent-calibration
+    content: Add complete developer diagnostics, fast behavioral calibration gates, and a release-mode adjacent-strength self-play harness.
+    status: completed
   - id: clients
     content: Build the shared board UI, web app, Tauri shell, and anonymous Convex rooms.
     status: in_progress
   - id: acceptance
     content: Run the complete native, WASM, browser, Convex, and desktop acceptance suite and rewrite the README.
-    status: pending
+    status: completed
 isProject: false
 ---
 
@@ -399,6 +411,34 @@ interface PloyBot {
 AI errors are `unsupportedMode`, `noLegalMove`, `aborted`, `timeout`, and `engineFailure`. Preserve Tensi's MIT notice and algorithmic attribution in `crates/ploy-core/NOTICE`; do not copy its rules or UI.
 
 Required tests: legal result, immutable input, deterministic seed, Commander capture in one, final-LPS win, avoid mate in one when savable, prefer terminal win to material, useful rotation, Shield combo, node bound, non-two-player rejection, Worker-only execution, abort/timeout recovery, and two bots completing up to 80 legal plies or reaching a terminal state without throwing.
+
+### Wave 1C — trustworthy opponent profiles and adaptive strength
+
+Allowed scope: search modules inside `crates/ploy-core`, the `choose_move` binding in `crates/ploy-wasm`, `packages/rules` search wire types, `packages/ai`, computer settings and diagnostics inside `apps/web`, computer-seat fields and mutations inside `convex`, domain/ADR documentation, and their tests. Existing move rules and non-computer modes remain frozen.
+
+Opponent strength and opponent style are independent. Strength controls search budget and bounded candidate selection. Style changes evaluation preferences among strategically close moves but may not override a terminal result, an immediate forced win, an avoidable immediate defeat, or Commander safety. The initial public strengths remain Cadet, Navigator, Commander, and Strategist. The initial styles are Balanced, Aggressor, Guardian, Maneuverer, and Trickster.
+
+Before iterative deepening, score every root move using a bounded static prepass. Search interruption retains the last fully completed depth; if depth 1 does not complete, return the best statically scored fallback rather than generator order. Return completed depth, node count, best score, selected score, score loss, fallback kind, and a principal variation. A rotation has no motion destination and never creates a false recapture extension.
+
+One game owns one game seed. A retry or resumed turn with the same snapshot, profile revision, and seed returns the same move. A rematch retains strength and style but creates a new seed. Every mid-game opponent-profile change increments a profile revision. If a local change occurs while search is active, cancel and restart. Online computer submissions carry the revision used for search; Convex rejects an obsolete revision. Only the room host may change an online computer profile. Convex still never searches.
+
+Local saves migrate from difficulty-only settings to a versioned opponent configuration. Existing difficulty becomes strength, style defaults to Balanced, and a generated game seed is then preserved. Undo changes board history but does not undo a manual opponent-profile change. Rematch retains the current profile.
+
+Adaptive strength is explicit and bounded by player-selected minimum and maximum strengths. It never changes style. Balanced referee analysis evaluates qualifying human moves independently of the opponent profile. Moves in the opening eight plies, forced moves, insufficiently completed analysis, and positions with fewer than three legal choices do not qualify. Adjustment uses a rolling window, requires at least four qualifying samples, changes at most one strength step, and then observes a four-turn cooldown. Referee failure skips a sample and never blocks play. Manual profile settings persist; adaptive samples at or after an undone ply are discarded before adaptive state is recomputed.
+
+Required tests: scored fallback under first-iteration exhaustion; partial deeper iteration retains the last completed result; profile and game-seed determinism; style tactical guardrails; distinct style preferences on neutral fixtures; local v2 save migration; mid-search profile cancellation; stale online profile-revision rejection; host-only online change; rematch seed replacement; forced and low-confidence referee exclusions; bounded one-step adaptation; cooldown; undo/resume reproduction; Worker timeout recovery; and native/WASM parity.
+
+Gate: build the committed WASM artifact, run formatting and clippy with warnings denied, all Rust and Bun tests, lint, typecheck, web build, Worker smoke, anonymous local Convex tests, and the final acceptance commands. Automatic adaptive strength ships behind an Experimental label until calibrated self-play and human review demonstrate stable level separation.
+
+### Wave 1D — opponent diagnostics and calibration
+
+Allowed scope: opponent tests and examples inside `crates/ploy-core`, Worker timing metadata in `packages/ai`, developer-only diagnostics in `apps/web`, and calibration documentation.
+
+Developer diagnostics show profile revision, strength, style, game seed, completed depth, nodes, Worker elapsed time, full principal variation, best and selected scores, intentional score loss, fallback quality, referee loss/time, adaptive evidence, rolling loss, confidence, cooldown, and the latest adjustment reason.
+
+Fast required gates cover proportional strength effort, controlled-error ceilings, multi-seed controlled variety, tactical guardrails, and distinct style preferences on a reachable fixture. A release-mode native harness runs adjacent strengths with product budgets and swapped colors. Its results are engineering calibration only: do not publish numerical ratings until longer multi-seed terminal self-play and human review demonstrate stable separation.
+
+Gate: fast native and Worker tests pass; release calibration runs without an illegal move or search failure; measured results and their limitations are committed in `docs/implementation/ai-opponent-calibration.md`.
 
 ### Wave 2A — shared board UI
 

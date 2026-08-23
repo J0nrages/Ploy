@@ -166,6 +166,24 @@ input:focus-visible {
   box-shadow: 0 0 0.55rem currentColor;
 }
 
+.profile-dot {
+  align-items: center;
+  border: 1px solid rgba(244, 211, 94, 0.7);
+  border-radius: 999px;
+  color: #f4d35e;
+  display: inline-flex;
+  font-size: 0.52rem;
+  font-weight: 800;
+  height: 1.1rem;
+  justify-content: center;
+  letter-spacing: 0.04em;
+  width: 1.1rem;
+}
+
+.move-profile .move-copy {
+  color: #f4d35e;
+}
+
 .hud.menu {
   --menu-content-width: 48rem;
   display: grid;
@@ -538,10 +556,138 @@ fieldset legend {
   padding: 0;
 }
 
+.computer-settings fieldset + fieldset {
+  margin-top: 0.85rem;
+}
+
 .option-pills {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.45rem;
+}
+
+.option-pills-styles {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.opponent-style-hint {
+  margin-bottom: 0;
+}
+
+.in-game-computer-settings {
+  margin-bottom: 0.9rem;
+}
+
+.in-game-computer-settings .option-pills {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.profile-revision {
+  color: #bda9d6;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.computer-settings .adaptive-strength-settings {
+  border-top: 1px solid rgba(76, 201, 240, 0.18);
+  margin-top: 0.85rem;
+  padding-top: 0.2rem;
+}
+
+.experimental-badge {
+  border: 1px solid rgba(244, 211, 94, 0.52);
+  border-radius: 999px;
+  color: #f4d35e;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.35rem;
+  text-transform: uppercase;
+}
+
+.adaptive-toggle {
+  align-items: flex-start;
+  flex-direction: row;
+  gap: 0.65rem;
+}
+
+.adaptive-toggle input {
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
+  width: 1rem;
+}
+
+.adaptive-toggle span,
+.adaptive-toggle strong,
+.adaptive-toggle small {
+  display: block;
+}
+
+.adaptive-toggle small {
+  color: #bda9d6;
+  line-height: 1.35;
+  margin-top: 0.2rem;
+}
+
+.adaptive-bounds {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.adaptive-status {
+  margin-bottom: 0;
+}
+
+.ai-diagnostics {
+  border-top: 1px solid rgba(76, 201, 240, 0.18);
+  margin-top: 0.8rem;
+  padding-top: 0.65rem;
+}
+
+.ai-diagnostics summary {
+  color: #4cc9f0;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.ai-diagnostics dl {
+  display: grid;
+  gap: 0.3rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ai-diagnostics dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.ai-diagnostics dt,
+.ai-diagnostics dd {
+  font-size: 0.72rem;
+  margin: 0;
+}
+
+.ai-diagnostics dd {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.online-computer-settings {
+  background: rgba(7, 3, 20, 0.34);
+  border: 1px solid rgba(76, 201, 240, 0.18);
+  border-radius: 0.9rem;
+  margin-block: 0.85rem;
+  padding: 0.8rem;
+}
+
+.online-computer-settings .row {
+  align-items: end;
+}
+
+.online-computer-settings label {
+  flex: 1 1 8rem;
 }
 
 .option-pills button {
@@ -1033,4 +1179,3 @@ label > input {
   }
 
 }
-

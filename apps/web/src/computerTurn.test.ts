@@ -37,6 +37,11 @@ test("timeout retries once with a smaller deterministic budget", async () => {
     depth: 1,
     nodes: 250,
     score: 0,
+    bestScore: 0,
+    scoreLoss: 0,
+    principalVariation: [{ type: "rotate", at: 0, steps: 1 }],
+    fallback: "none",
+    elapsedMs: 12,
   };
   const calls: number[] = [];
   const bot: PloyBot = {
@@ -46,6 +51,9 @@ test("timeout retries once with a smaller deterministic budget", async () => {
         throw new AiError("timeout");
       }
       return result;
+    },
+    async reviewMove() {
+      throw new Error("not used by computer-turn tests");
     },
     terminate() {},
   };
@@ -75,6 +83,13 @@ test("turn keys change for alternative positions at the same ply", () => {
   );
 });
 
+test("turn keys change when an opponent profile revision changes", () => {
+  const snapshot = createGame("twoPlayer");
+  expect(snapshotTurnKey("game:profile:1", snapshot, "green")).not.toBe(
+    snapshotTurnKey("game:profile:2", snapshot, "green"),
+  );
+});
+
 test("retry options remain within useful bounds", () => {
   expect(
     reducedRetryOptions({ maxTimeMs: 200, maxDepth: 1, maxNodes: 250, randomSeed: 1 }),
@@ -88,6 +103,7 @@ test("a failed acknowledgement retries the exact move and request id", async () 
       requestId: "stable-request",
       expectedPly: 0,
       turnKey: "game:0:green",
+      profileRevision: 4,
     },
   };
   const attempts: PendingComputerMove[] = [];
@@ -108,10 +124,12 @@ test("a failed acknowledgement retries the exact move and request id", async () 
 
   expect(attempts).toEqual([pending, pending]);
   expect(attempts[0]?.operation.requestId).toBe(attempts[1]?.operation.requestId);
+  expect(attempts[0]?.operation.profileRevision).toBe(4);
 });
 
-test("only stale-ply failures discard a pending result", () => {
+test("stale position or profile failures discard a pending result", () => {
   expect(isStaleTurnError(new Error("stale expected ply"))).toBe(true);
+  expect(isStaleTurnError(new Error("computer profile is not current"))).toBe(true);
   expect(isStaleTurnError(new Error("computer lease is not current"))).toBe(false);
   expect(isStaleTurnError("stale expected ply")).toBe(false);
 });

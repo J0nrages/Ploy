@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
   createPloyBot,
-  DIFFICULTY_BUDGETS,
-  type Difficulty,
+  searchOptionsForProfile,
+  type OpponentProfile,
   type PloyBot,
+  type SearchResult,
 } from "@ploy/ai";
 import type { Color, Move, Snapshot } from "@ploy/rules";
 import {
@@ -21,7 +22,9 @@ export function useComputerTurn(args: {
   acting: Color | null;
   enabled: boolean;
   turnKey: string | null;
-  difficulty: Difficulty;
+  profile: OpponentProfile;
+  gameSeed: number;
+  profileRevision: number;
   onMove: (move: Move, operation: ComputerMoveOperation) => Promise<void>;
   onError: (message: string) => void;
 }): {
@@ -30,9 +33,11 @@ export function useComputerTurn(args: {
   canRetry: boolean;
   cancel: () => void;
   retry: () => void;
+  lastResult: SearchResult | null;
 } {
   const [status, setStatus] = useState<ComputerTurnStatus>("idle");
   const [retryNonce, setRetryNonce] = useState(0);
+  const [lastResult, setLastResult] = useState<SearchResult | null>(null);
   const botRef = useRef<PloyBot | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const pendingRef = useRef<PendingComputerMove | null>(null);
@@ -84,18 +89,25 @@ export function useComputerTurn(args: {
             bot,
             snapshot,
             color: acting,
-            options: DIFFICULTY_BUDGETS[args.difficulty],
+            options: searchOptionsForProfile(
+              args.profile,
+              args.gameSeed,
+              snapshot.ply,
+              args.profileRevision,
+            ),
             signal: controller.signal,
           });
           if (disposed || controller.signal.aborted) {
             return;
           }
+          setLastResult(result);
           pending = {
             move: result.move,
             operation: {
               requestId: newRequestId(),
               expectedPly: snapshot.ply,
               turnKey,
+              profileRevision: args.profileRevision,
             },
           };
           pendingRef.current = pending;
@@ -127,12 +139,22 @@ export function useComputerTurn(args: {
       disposed = true;
       controller.abort();
     };
-  }, [args.acting, args.difficulty, args.enabled, args.turnKey, retryNonce]);
+  }, [
+    args.acting,
+    args.enabled,
+    args.gameSeed,
+    args.profile.strength,
+    args.profile.style,
+    args.profileRevision,
+    args.turnKey,
+    retryNonce,
+  ]);
 
   return {
     status,
     thinking: status === "thinking" || status === "submitting",
     canRetry: status === "cancelled" || status === "failed",
+    lastResult,
     cancel: () => {
       abortRef.current?.abort();
       setStatus("cancelled");

@@ -1,10 +1,10 @@
 # WASM spike
 
-- artifact SHA-256: `25cfc2648ef8309d112358d084553a47720be7ca0ee20cfe53d9dd3605327927`
+- artifact SHA-256: `61eaca3ea94d8f7be188e7b54558b6574fba1080f7ba054966b59afb57097303`
 - imports: none
 - fixture apply JSON bytes: 3295
-- Tensi-style search completed depth 2: 50000 nodes in 578.93 ms
-- nodes/second: 86366
+- Tensi-style search completed depth 2: 50000 nodes in 584.26 ms
+- nodes/second: 85579
 
 Worker and Convex hosts apply the same Green e3-e4 shield motion and must return this exact JSON payload:
 

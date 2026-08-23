@@ -11,7 +11,10 @@ use crate::movegen::{
     compact_board, effective_flags, generate_moves, CompactBoard, CompactKind, CompactPiece,
 };
 use crate::moves::controller_for_turn;
-use crate::types::{Color, Mode, Move, SearchResult, Snapshot, Variant, WinnerKind};
+use crate::types::{
+    Color, Mode, Move, MoveReview, OpponentStyle, SearchFallback, SearchResult, Snapshot, Variant,
+    WinnerKind,
+};
 use crate::validate::validate_snapshot;
 
 const MATE: i32 = 100_000;
@@ -19,7 +22,7 @@ const INFINITY: i32 = 200_000;
 const TT_SIZE: usize = 1 << 17;
 const MAX_SEARCH_DEPTH: u32 = 12;
 const REFUTATIONS_PER_PLY: usize = 4;
-const NEAR_EQUAL: i32 = 12;
+const DEFAULT_SCORE_LOSS: i32 = 12;
 const EXTENSIONS_PER_LINE: u8 = 2;
 const QUIESCENCE_DEPTH: u8 = 2;
 
@@ -54,6 +57,7 @@ struct Searcher {
     history: [[i32; 81]; 81],
     seed: u32,
     generation: u16,
+    style: OpponentStyle,
 }
 
 #[derive(Clone)]
@@ -78,6 +82,11 @@ struct Undo {
 #[derive(Debug, Clone, Copy)]
 struct BudgetExhausted;
 
+struct SearchOutcome {
+    result: SearchResult,
+    root_scores: Vec<(Move, i32)>,
+}
+
 pub fn choose_move(
     snapshot: &Snapshot,
     color: Color,
@@ -85,6 +94,85 @@ pub fn choose_move(
     max_nodes: u64,
     random_seed: u32,
 ) -> Result<SearchResult, RulesError> {
+    choose_move_with_profile(
+        snapshot,
+        color,
+        max_depth,
+        max_nodes,
+        random_seed,
+        OpponentStyle::Balanced,
+        DEFAULT_SCORE_LOSS,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn choose_move_with_profile(
+    snapshot: &Snapshot,
+    color: Color,
+    max_depth: u32,
+    max_nodes: u64,
+    random_seed: u32,
+    style: OpponentStyle,
+    max_score_loss: i32,
+) -> Result<SearchResult, RulesError> {
+    search_position(
+        snapshot,
+        color,
+        max_depth,
+        max_nodes,
+        random_seed,
+        style,
+        max_score_loss,
+    )
+    .map(|outcome| outcome.result)
+}
+
+pub fn review_move(
+    snapshot: &Snapshot,
+    color: Color,
+    played_move: &Move,
+    max_depth: u32,
+    max_nodes: u64,
+    random_seed: u32,
+) -> Result<MoveReview, RulesError> {
+    let outcome = search_position(
+        snapshot,
+        color,
+        max_depth,
+        max_nodes,
+        random_seed,
+        OpponentStyle::Balanced,
+        0,
+    )?;
+    let played_score = outcome
+        .root_scores
+        .iter()
+        .find_map(|(mv, score)| (mv == played_move).then_some(*score))
+        .ok_or_else(|| RulesError::new("invalidMove", "reviewed move is not legal"))?;
+    let result = outcome.result;
+    Ok(MoveReview {
+        best_move: result.mv,
+        depth: result.depth,
+        nodes: result.nodes,
+        played_score,
+        best_score: result.best_score,
+        score_loss: result.best_score.saturating_sub(played_score).max(0),
+        legal_move_count: outcome.root_scores.len() as u32,
+        principal_variation: result.principal_variation,
+        fallback: result.fallback,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn search_position(
+    snapshot: &Snapshot,
+    color: Color,
+    max_depth: u32,
+    max_nodes: u64,
+    random_seed: u32,
+    style: OpponentStyle,
+    max_score_loss: i32,
+) -> Result<SearchOutcome, RulesError> {
     validate_snapshot(snapshot)?;
     if snapshot.mode != Mode::TwoPlayer {
         return Err(RulesError::new(
@@ -98,30 +186,43 @@ pub fn choose_move(
 
     let mut position = Position::from_snapshot(snapshot);
     let root_moves = position.moves();
-    let Some(fallback) = root_moves.first().cloned() else {
+    let Some(_) = root_moves.first() else {
         return Err(RulesError::new("noLegalMove", "no legal move for search"));
     };
     let node_limit = max_nodes.max(1);
 
-    // Cadet deliberately plays varied, capture-biased legal moves rather than
-    // pretending that a one-ply evaluation is a full search difficulty.
+    let score_loss_limit = max_score_loss.max(0);
+
+    let mut root_scores = static_root_scores(&mut position, root_moves, style);
+    root_scores.sort_by(|(left_move, left_score), (right_move, right_score)| {
+        right_score.cmp(left_score).then_with(|| {
+            stable_move_noise(left_move, random_seed)
+                .cmp(&stable_move_noise(right_move, random_seed))
+        })
+    });
+
+    // Cadet chooses deterministically among evaluated candidates within its
+    // controlled-error limit instead of returning an arbitrary legal move.
     if max_depth <= 1 && node_limit <= 250 {
-        return Ok(cadet_move(
-            &mut position,
-            &root_moves,
-            random_seed,
-            node_limit,
-        ));
+        let result = cadet_move(&root_scores, random_seed, node_limit, score_loss_limit);
+        return Ok(SearchOutcome {
+            result,
+            root_scores,
+        });
     }
 
-    let mut searcher = Searcher::new(node_limit, random_seed);
+    let (fallback, fallback_score) = root_scores[0].clone();
+    let mut searcher = Searcher::new(node_limit, random_seed, style);
     let mut best = SearchResult {
-        mv: fallback,
+        mv: fallback.clone(),
         depth: 0,
         nodes: 0,
-        score: evaluate(&position),
+        score: fallback_score,
+        best_score: fallback_score,
+        score_loss: 0,
+        principal_variation: vec![fallback],
+        fallback: SearchFallback::Static,
     };
-    let mut root_scores: Vec<(Move, i32)> = root_moves.into_iter().map(|mv| (mv, 0)).collect();
 
     for depth in 1..=max_depth.clamp(1, MAX_SEARCH_DEPTH) {
         searcher.generation = searcher.generation.wrapping_add(1);
@@ -157,42 +258,71 @@ pub fn choose_move(
         let best_score = iteration[0].1;
         let near_equal: Vec<&(Move, i32)> = iteration
             .iter()
-            .filter(|(_, score)| best_score - *score <= NEAR_EQUAL)
+            .filter(|(_, score)| best_score - *score <= score_loss_limit)
             .collect();
         let selected = near_equal[searcher.next_random() as usize % near_equal.len()];
         best.mv = selected.0.clone();
         best.score = selected.1;
+        best.best_score = best_score;
+        best.score_loss = best_score - selected.1;
         best.depth = depth;
+        best.fallback = SearchFallback::None;
         root_scores = iteration;
     }
 
     best.nodes = searcher.nodes;
-    Ok(best)
+    best.principal_variation = searcher.principal_variation(&position, &best.mv, best.depth);
+    Ok(SearchOutcome {
+        result: best,
+        root_scores,
+    })
 }
 
-fn cadet_move(position: &mut Position, moves: &[Move], seed: u32, max_nodes: u64) -> SearchResult {
-    let captures: Vec<&Move> = moves.iter().filter(|mv| position.is_capture(mv)).collect();
-    let pool: Vec<&Move> = if captures.is_empty() {
-        moves.iter().collect()
-    } else {
-        captures
-    };
+fn static_root_scores(
+    position: &mut Position,
+    moves: Vec<Move>,
+    style: OpponentStyle,
+) -> Vec<(Move, i32)> {
+    moves
+        .into_iter()
+        .map(|mv| {
+            let style_bonus = style_move_bonus(style, position, &mv);
+            let undo = position.make_move(&mv);
+            let score = -evaluate(position, style) + style_bonus;
+            position.unmake_move(undo);
+            (mv, score)
+        })
+        .collect()
+}
+
+fn cadet_move(
+    scored: &[(Move, i32)],
+    seed: u32,
+    max_nodes: u64,
+    max_score_loss: i32,
+) -> SearchResult {
+    let best_score = scored[0].1;
+    let candidates: Vec<&(Move, i32)> = scored
+        .iter()
+        .filter(|(_, score)| best_score - *score <= max_score_loss)
+        .collect();
     let mut state = seed;
     state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-    let mv = (*pool[state as usize % pool.len()]).clone();
-    let undo = position.make_move(&mv);
-    let score = -evaluate(position);
-    position.unmake_move(undo);
+    let (mv, score) = candidates[state as usize % candidates.len()];
     SearchResult {
-        mv,
+        mv: mv.clone(),
         depth: 0,
         nodes: max_nodes.min(1),
-        score,
+        score: *score,
+        best_score,
+        score_loss: best_score - *score,
+        principal_variation: vec![mv.clone()],
+        fallback: SearchFallback::Static,
     }
 }
 
 impl Searcher {
-    fn new(max_nodes: u64, seed: u32) -> Self {
+    fn new(max_nodes: u64, seed: u32, style: OpponentStyle) -> Self {
         Self {
             nodes: 0,
             max_nodes,
@@ -201,6 +331,7 @@ impl Searcher {
             history: [[0; 81]; 81],
             seed,
             generation: 0,
+            style,
         }
     }
 
@@ -278,13 +409,14 @@ impl Searcher {
 
         let mut moves = position.moves();
         if moves.is_empty() {
-            return Ok(evaluate(position));
+            return Ok(evaluate(position, self.style));
         }
         self.order_moves(position, &mut moves, ply, tt_move.as_ref());
 
         let mut best_score = -INFINITY;
         let mut best_move = None;
         for mv in moves {
+            let style_bonus = style_move_bonus(self.style, position, &mv);
             let quiet = !position.is_capture(&mv);
             let recapture = matches!(
                 mv,
@@ -305,7 +437,7 @@ impl Searcher {
                 child_extensions,
             );
             position.unmake_move(undo);
-            let score = -child?;
+            let score = -child? + style_bonus;
 
             if score > best_score {
                 best_score = score;
@@ -347,7 +479,7 @@ impl Searcher {
                 -MATE + ply as i32
             });
         }
-        let stand_pat = evaluate(position);
+        let stand_pat = evaluate(position, self.style);
         if stand_pat >= beta {
             return Ok(stand_pat);
         }
@@ -363,12 +495,13 @@ impl Searcher {
             .collect();
         self.order_moves(position, &mut captures, ply, None);
         for mv in captures {
+            let style_bonus = style_move_bonus(self.style, position, &mv);
             let undo = position.make_move(&mv);
             let child = self.tick().and_then(|()| {
                 self.quiescence_after_tick(position, -beta, -alpha, ply + 1, remaining - 1)
             });
             position.unmake_move(undo);
-            let score = -child?;
+            let score = -child? + style_bonus;
             if score >= beta {
                 return Ok(score);
             }
@@ -502,6 +635,54 @@ impl Searcher {
             .wrapping_add(1_013_904_223);
         self.seed
     }
+
+    fn principal_variation(
+        &self,
+        root: &Position,
+        root_move: &Move,
+        completed_depth: u32,
+    ) -> Vec<Move> {
+        let mut variation = vec![root_move.clone()];
+        if completed_depth <= 1 {
+            return variation;
+        }
+
+        let mut position = root.clone();
+        if !position.moves().contains(root_move) {
+            return variation;
+        }
+        position.make_move(root_move);
+        let mut remaining = completed_depth - 1;
+        let mut extensions_left = EXTENSIONS_PER_LINE;
+
+        while remaining > 0 && position.winner.is_none() {
+            let tt_hash = position.hash ^ zobrist_extension_budget(extensions_left);
+            let Some(mv) = self
+                .tt_entry(tt_hash)
+                .and_then(|entry| entry.best_move.clone())
+            else {
+                break;
+            };
+            if !position.moves().contains(&mv) {
+                break;
+            }
+
+            let quiet = !position.is_capture(&mv);
+            let recapture = matches!(
+                mv,
+                Move::Motion { to, .. }
+                    if !quiet && position.last_move_to == Some(to)
+            );
+            position.make_move(&mv);
+            let commander_attack = commander_threatened(&position, position.side);
+            let extend = extensions_left > 0 && (recapture || commander_attack);
+            remaining = remaining - 1 + u32::from(extend);
+            extensions_left = extensions_left.saturating_sub(u8::from(extend));
+            variation.push(mv);
+        }
+
+        variation
+    }
 }
 
 impl Position {
@@ -567,7 +748,7 @@ impl Position {
             Move::Rotate { at, steps } => {
                 let moving = self.board[at as usize].expect("generated rotation has a piece");
                 self.set_square(at, Some(moving.rotated(steps)));
-                self.set_last_move_to(Some(at));
+                self.set_last_move_to(None);
                 self.flip_side();
                 self.winner = self.derived_winner();
                 Undo {
@@ -650,10 +831,66 @@ impl Position {
     }
 }
 
-fn evaluate(position: &Position) -> i32 {
+#[derive(Clone, Copy)]
+struct EvaluationWeights {
+    center: i32,
+    activity: i32,
+    mobility: i32,
+    captures: i32,
+    own_commander_threat: i32,
+    enemy_commander_threat: i32,
+}
+
+fn evaluation_weights(style: OpponentStyle) -> EvaluationWeights {
+    match style {
+        OpponentStyle::Balanced => EvaluationWeights {
+            center: 1,
+            activity: 3,
+            mobility: 2,
+            captures: 22,
+            own_commander_threat: 650,
+            enemy_commander_threat: 760,
+        },
+        OpponentStyle::Aggressor => EvaluationWeights {
+            center: 1,
+            activity: 3,
+            mobility: 2,
+            captures: 30,
+            own_commander_threat: 700,
+            enemy_commander_threat: 900,
+        },
+        OpponentStyle::Guardian => EvaluationWeights {
+            center: 1,
+            activity: 3,
+            mobility: 2,
+            captures: 18,
+            own_commander_threat: 950,
+            enemy_commander_threat: 650,
+        },
+        OpponentStyle::Maneuverer => EvaluationWeights {
+            center: 2,
+            activity: 5,
+            mobility: 4,
+            captures: 18,
+            own_commander_threat: 720,
+            enemy_commander_threat: 700,
+        },
+        OpponentStyle::Trickster => EvaluationWeights {
+            center: 1,
+            activity: 4,
+            mobility: 3,
+            captures: 20,
+            own_commander_threat: 720,
+            enemy_commander_threat: 880,
+        },
+    }
+}
+
+fn evaluate(position: &Position, style: OpponentStyle) -> i32 {
     if let Some(winner) = position.winner {
         return if winner == position.side { MATE } else { -MATE };
     }
+    let weights = evaluation_weights(style);
     let us = position.side;
     let them = opponent(us);
     let mut score = 0;
@@ -668,19 +905,19 @@ fn evaluate(position: &Position) -> i32 {
         let rank = square / 9;
         let file = square % 9;
         let distance = (rank as i32 - 4).abs() + (file as i32 - 4).abs();
-        score += sign * (12 - distance * 2).max(0);
-        score += sign * directional_activity(position, square, piece);
+        score += sign * (12 - distance * 2).max(0) * weights.center;
+        score += sign * directional_activity(position, square, piece) * weights.activity;
     }
 
     let (our_mobility, our_captures) = mobility(position, us);
     let (their_mobility, their_captures) = mobility(position, them);
-    score += (our_mobility - their_mobility) * 2;
-    score += (our_captures - their_captures) * 22;
+    score += (our_mobility - their_mobility) * weights.mobility;
+    score += (our_captures - their_captures) * weights.captures;
     if commander_threatened(position, us) {
-        score -= 650;
+        score -= weights.own_commander_threat;
     }
     if commander_threatened(position, them) {
-        score += 760;
+        score += weights.enemy_commander_threat;
     }
     score
 }
@@ -732,11 +969,54 @@ fn directional_activity(position: &Position, square: u8, piece: CompactPiece) ->
         if (0..9).contains(&next_rank) && (0..9).contains(&next_file) {
             let to = (next_rank * 9 + next_file) as usize;
             if position.board[to].is_none_or(|other| other.controller != piece.controller) {
-                active += 3;
+                active += 1;
             }
         }
     }
     active
+}
+
+fn style_move_bonus(style: OpponentStyle, position: &Position, mv: &Move) -> i32 {
+    match style {
+        OpponentStyle::Balanced => 0,
+        OpponentStyle::Aggressor => {
+            if position.is_capture(mv) {
+                12
+            } else {
+                0
+            }
+        }
+        OpponentStyle::Guardian => match mv {
+            Move::Rotate { at, .. }
+                if position.board[*at as usize].is_some_and(CompactPiece::is_commander) =>
+            {
+                10
+            }
+            _ => 0,
+        },
+        OpponentStyle::Maneuverer => match mv {
+            Move::Motion { from, to, .. } => {
+                let from_distance = square_center_distance(*from);
+                let to_distance = square_center_distance(*to);
+                (from_distance - to_distance).clamp(-4, 4) * 2
+            }
+            Move::Rotate { .. } => 4,
+        },
+        OpponentStyle::Trickster => match mv {
+            Move::Rotate { .. } => 10,
+            Move::Motion {
+                post_move_steps: Some(_),
+                ..
+            } => 8,
+            Move::Motion { .. } => 0,
+        },
+    }
+}
+
+fn square_center_distance(square: u8) -> i32 {
+    let rank = (square / 9) as i32;
+    let file = (square % 9) as i32;
+    (rank - 4).abs() + (file - 4).abs()
 }
 
 fn material(piece: CompactPiece) -> i32 {
@@ -830,6 +1110,88 @@ mod tests {
         assert_eq!(
             position.moves(),
             crate::moves::legal_moves_generated(&snapshot, Color::Green)
+        );
+    }
+
+    #[test]
+    fn balanced_referee_scores_the_move_the_human_played() {
+        let snapshot = initial_snapshot(Mode::TwoPlayer);
+        let moves = crate::moves::legal_moves_generated(&snapshot, Color::Green);
+        let played = moves.last().expect("opening has legal moves").clone();
+        let review = review_move(&snapshot, Color::Green, &played, 1, 100_000, 7).unwrap();
+
+        assert_eq!(review.legal_move_count, moves.len() as u32);
+        assert_eq!(review.depth, 1);
+        assert_eq!(review.score_loss, review.best_score - review.played_score);
+        assert!(moves.contains(&review.best_move));
+    }
+
+    #[test]
+    fn balanced_referee_rejects_a_move_outside_the_root_position() {
+        let snapshot = initial_snapshot(Mode::TwoPlayer);
+        let invalid = Move::Rotate { at: 40, steps: 1 };
+        let error = review_move(&snapshot, Color::Green, &invalid, 1, 100_000, 7)
+            .expect_err("invalid review target must be rejected");
+        assert_eq!(error.code, "invalidMove");
+    }
+
+    #[test]
+    fn rotation_does_not_create_a_motion_destination() {
+        let snapshot = initial_snapshot(Mode::TwoPlayer);
+        let mut position = Position::from_snapshot(&snapshot);
+        let rotation = position
+            .moves()
+            .into_iter()
+            .find(|mv| matches!(mv, Move::Rotate { .. }))
+            .expect("opening has a direction move");
+        position.make_move(&rotation);
+        assert_eq!(position.last_move_to, None);
+    }
+
+    #[test]
+    fn styles_add_only_bounded_move_preferences() {
+        let snapshot = initial_snapshot(Mode::TwoPlayer);
+        let mut position = Position::from_snapshot(&snapshot);
+        let rotation = position
+            .moves()
+            .into_iter()
+            .find(|mv| matches!(mv, Move::Rotate { .. }))
+            .expect("opening has a direction move");
+        assert_eq!(
+            style_move_bonus(OpponentStyle::Balanced, &position, &rotation),
+            0
+        );
+        assert_eq!(
+            style_move_bonus(OpponentStyle::Trickster, &position, &rotation),
+            10
+        );
+        assert_eq!(
+            style_move_bonus(OpponentStyle::Maneuverer, &position, &rotation),
+            4
+        );
+        let commander_rotation = position
+            .moves()
+            .into_iter()
+            .find(|mv| matches!(mv, Move::Rotate { at: 4, .. }))
+            .expect("opening Commander can rotate");
+        assert_eq!(
+            style_move_bonus(OpponentStyle::Guardian, &position, &commander_rotation),
+            10
+        );
+        position.board[31] = Some(CompactPiece {
+            color: Color::Coral,
+            controller: Color::Coral,
+            kind: CompactKind::Shield,
+            rot: 4,
+        });
+        let capture = Move::Motion {
+            from: 22,
+            to: 31,
+            post_move_steps: None,
+        };
+        assert_eq!(
+            style_move_bonus(OpponentStyle::Aggressor, &position, &capture),
+            12
         );
     }
 

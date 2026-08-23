@@ -8,6 +8,8 @@ import {
   roomStatusValidator,
   seatKindValidator,
   snapshotValidator,
+  opponentStyleValidator,
+  strengthValidator,
 } from "./validators";
 
 export default defineSchema({
@@ -26,6 +28,9 @@ export default defineSchema({
     displayName: v.string(),
     kind: seatKindValidator,
     difficulty: v.optional(difficultyValidator),
+    strength: v.optional(strengthValidator),
+    style: v.optional(opponentStyleValidator),
+    profileRevision: v.optional(v.number()),
     leaseOwnerSessionId: v.optional(v.union(v.string(), v.null())),
     leaseExpiresAt: v.optional(v.number()),
     leaseEpoch: v.optional(v.number()),
@@ -37,6 +42,7 @@ export default defineSchema({
   games: defineTable({
     roomId: v.id("rooms"),
     snapshot: snapshotValidator,
+    computerGameSeed: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }),
@@ -48,6 +54,7 @@ export default defineSchema({
     byColor: colorValidator,
     bySessionId: v.string(),
     requestId: v.string(),
+    computerProfileRevision: v.optional(v.number()),
   })
     .index("by_game", ["gameId"])
     .index("by_game_and_requestId", ["gameId", "requestId"]),

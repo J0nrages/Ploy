@@ -21,7 +21,7 @@ Ploy has an unusually expressive ruleset: every piece's geometry determines both
 This edition combines the original game with a modern implementation:
 
 - All official modes: two-player, four-player free-for-all, and partnership
-- A responsive offline computer opponent with four difficulty levels
+- A responsive computer opponent with four strengths and five playing styles
 - One authoritative Rust/WASM rules engine across every surface
 - A 2.5D path-vertex board inspired by the original space-age design
 - Local saves, undo, hotseat play, and keyboard interaction
@@ -35,10 +35,10 @@ The computer opponent is conventional game-tree search—not an LLM, neural netw
 | Surface | Status |
 | --- | --- |
 | Local web play | Playable and tested |
-| Two-player computer opponent | Playable: Cadet through Strategist |
+| Two-player computer opponent | Playable: four strengths, five styles, and experimental local adaptation |
 | Four-player and partnership | Playable locally |
 | Anonymous online rooms | Implemented; requires a Convex development environment |
-| Online computer seat | Implemented with client lease and failover |
+| Online computer seat | Implemented with host-controlled mid-game profiles, client lease, and failover |
 | Tauri desktop | Scaffolded; requires platform-specific Tauri libraries |
 | Production deployment | Not currently provided |
 
@@ -75,6 +75,8 @@ Every piece carries one or more directional indicators. On a turn, choose one ac
 
 Lances move up to three spaces, Probes up to two, and Commanders and Shields one. Pieces block movement, and an opposing piece is captured by landing on its position.
 
+Two-player armies begin with 15 pieces per color. Four-player free-for-all and partnership armies begin with 9 pieces per color.
+
 Shields are special: after moving, a Shield may also rotate as part of the same turn.
 
 A player is defeated when their Commander is captured or they lose all their Lances, Probes, and Shields. Free-for-all and partnership games apply the continuation and takeover rules printed in the original 1970 instructions.
@@ -95,14 +97,42 @@ It uses:
 - Capture quiescence
 - Deterministic node budgets
 
-| Difficulty | Character |
-| --- | --- |
-| Cadet | Fast, varied, and capture-biased |
-| Navigator | Shallow tactical lookahead |
-| Commander | Stronger balanced search |
-| Strategist | Largest search budget |
+Strength controls search budget and how much evaluated score loss the opponent is allowed to accept. Style is a separate preference layer that can distinguish strategically close moves without overriding a forced win, avoidable loss, or Commander safety.
 
-Search runs in a persistent module Worker. Cancellation terminates the active Worker safely, and failed turns can be resumed without applying a partial move.
+| Strength | Character |
+| --- | --- |
+| Cadet | Fast and varied; may choose a clearly imperfect scored move |
+| Navigator | Shallow tactical lookahead with modest controlled errors |
+| Commander | Deeper search with only small score concessions |
+| Strategist | Largest search budget and always selects a top-scored move |
+
+| Style | Preference |
+| --- | --- |
+| Balanced | Material, mobility, safety, and immediate threats |
+| Aggressor | Sound captures and Commander pressure |
+| Guardian | Commander safety, blocking, and lower-risk positions |
+| Maneuverer | Mobility, central access, and productive reorientation |
+| Trickster | Unusual rotations and threat creation within tactical limits |
+
+Strength and style can be changed during local or online games. The current search is cancelled and restarted locally; online moves include the profile revision used for their search, so the server rejects an obsolete result.
+
+Local computer games also offer **Adaptive strength (Experimental)**. This opt-in mode:
+
+- Reviews the human's actual move with a separate Balanced analysis in the same Rust/WASM core
+- Ignores the opening eight plies, forced moves, low-choice positions, incomplete searches, and failed reviews
+- Requires four qualifying samples, changes by at most one strength, and observes a four-move cooldown
+- Stays inside player-selected minimum and maximum strengths and never changes style
+- Rebuilds deterministically after undo and persists with the local save
+
+Adaptive mode is intentionally local-only while its thresholds are calibrated. Online hosts can still change fixed strength and style at any point.
+
+Search runs in a persistent module Worker. Cancellation terminates the active Worker safely, and failed turns can be resumed without applying a partial move. Each game has a seed and each profile change has a revision, making the same position, turn, seed, and revision reproducible while allowing different games to vary.
+
+Development builds expose a hidden diagnostics panel with the seed/revision, completed depth, nodes, elapsed time, full principal variation, score loss, fallback quality, and adaptive evidence/confidence/cooldown. The repeatable release-mode calibration harness swaps colors between adjacent strengths without claiming public ratings:
+
+```bash
+PLOY_CALIBRATION_PLIES=16 cargo run --release -p ploy-core --example calibrate
+```
 
 ## Architecture
 
@@ -134,7 +164,7 @@ crates/
 
 packages/
   rules/           TypeScript facade over WASM
-  ai/              Worker lifecycle and difficulty budgets
+  ai/              Worker lifecycle, strength budgets, and referee analysis
   ui-board/        Shared 2.5D board and interaction model
 
 apps/
@@ -165,6 +195,8 @@ Online games use six-character room codes and anonymous session identifiers. Con
 
 Computer search never runs inside Convex. A participating browser owns a renewable lease for the computer seat and submits its selected move through the normal authoritative path. Another participant can take over if that client disappears.
 
+Only the room host may change the computer's strength or style. A change increments the public profile revision and applies to the next computer decision; an in-flight result calculated under an older revision cannot be submitted as current.
+
 Do not run a production Convex deployment unless you intend to publish one.
 
 ## Desktop
@@ -184,6 +216,7 @@ On Debian or Ubuntu, development requires packages including `pkg-config`, `libd
 
 ```bash
 bun run build:wasm
+bun run wasm-gate
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
@@ -191,6 +224,8 @@ bun run test
 bun run lint
 bun run typecheck
 bun run --filter web build
+cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+CONVEX_AGENT_MODE=anonymous bun x convex dev --once
 ```
 
 The WASM gate verifies that:
@@ -206,6 +241,8 @@ Architecture and implementation contracts live in:
 - [`CONTEXT.md`](CONTEXT.md)
 - [`docs/implementation/ploy-remaster-execution.md`](docs/implementation/ploy-remaster-execution.md)
 - [`docs/adr/0001-single-rules-core.md`](docs/adr/0001-single-rules-core.md)
+- [`docs/adr/0002-deterministic-opponent-profiles.md`](docs/adr/0002-deterministic-opponent-profiles.md)
+- [`docs/implementation/ai-opponent-calibration.md`](docs/implementation/ai-opponent-calibration.md)
 
 ## Rules authority
 

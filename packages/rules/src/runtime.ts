@@ -14,6 +14,8 @@ export type SearchRequest = {
   maxDepth?: number;
   maxNodes: number;
   randomSeed: number;
+  style?: "balanced" | "aggressor" | "guardian" | "maneuverer" | "trickster";
+  maxScoreLoss?: number;
 };
 
 export type SearchResult = {
@@ -21,6 +23,31 @@ export type SearchResult = {
   depth: number;
   nodes: number;
   score: number;
+  bestScore: number;
+  scoreLoss: number;
+  principalVariation: Move[];
+  fallback: "none" | "static";
+};
+
+export type MoveReviewRequest = {
+  snapshot: Snapshot;
+  color: Color;
+  playedMove: Move;
+  maxDepth?: number;
+  maxNodes: number;
+  randomSeed: number;
+};
+
+export type MoveReview = {
+  bestMove: Move;
+  depth: number;
+  nodes: number;
+  playedScore: number;
+  bestScore: number;
+  scoreLoss: number;
+  legalMoveCount: number;
+  principalVariation: Move[];
+  fallback: "none" | "static";
 };
 
 export type RulesAdapter = {
@@ -32,6 +59,7 @@ export type RulesAdapter = {
   applyMove(snapshot: Snapshot, move: Move, color: Color): Snapshot;
   applyMoveRaw(snapshot: Snapshot, move: Move, color: Color): string;
   chooseMove(request: SearchRequest): SearchResult;
+  reviewMove(request: MoveReviewRequest): MoveReview;
 };
 
 type WasmExports = {
@@ -45,6 +73,7 @@ type WasmExports = {
   is_legal(ptr: number, len: number): number;
   apply_move(ptr: number, len: number): number;
   choose_move(ptr: number, len: number): number;
+  review_move(ptr: number, len: number): number;
 };
 
 const RULES_CODES: ReadonlySet<string> = new Set([
@@ -68,7 +97,8 @@ function isWasmExports(value: WebAssembly.Exports): value is WasmExports {
     typeof value.legal_moves === "function" &&
     typeof value.is_legal === "function" &&
     typeof value.apply_move === "function" &&
-    typeof value.choose_move === "function"
+    typeof value.choose_move === "function" &&
+    typeof value.review_move === "function"
   );
 }
 
@@ -141,6 +171,9 @@ export function wrapInstance(instance: WebAssembly.Instance): RulesAdapter {
     },
     chooseMove(request) {
       return call<SearchResult>(wasm.choose_move, request);
+    },
+    reviewMove(request) {
+      return call<MoveReview>(wasm.review_move, request);
     },
   };
 }
