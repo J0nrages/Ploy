@@ -70,6 +70,17 @@ struct ChooseMoveRequest {
     max_score_loss: Option<i32>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReviewMoveRequest {
+    snapshot: Snapshot,
+    color: Color,
+    played_move: Move,
+    max_depth: Option<u32>,
+    max_nodes: u64,
+    random_seed: u32,
+}
+
 const HEADER: usize = 4;
 
 fn encode_json<T: Serialize>(value: &T) -> Result<Vec<u8>, RulesError> {
@@ -228,6 +239,20 @@ pub extern "C" fn choose_move(ptr: u32, len: u32) -> u32 {
             request.random_seed,
             request.style.unwrap_or(OpponentStyle::Balanced),
             request.max_score_loss.unwrap_or(12),
+        )
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn review_move(ptr: u32, len: u32) -> u32 {
+    handle(ptr, len, |request: ReviewMoveRequest| {
+        ploy_core::review_move(
+            &request.snapshot,
+            request.color,
+            &request.played_move,
+            request.max_depth.unwrap_or(3),
+            request.max_nodes,
+            request.random_seed,
         )
     })
 }

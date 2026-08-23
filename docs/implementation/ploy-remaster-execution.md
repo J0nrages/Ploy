@@ -22,13 +22,13 @@ todos:
     status: completed
   - id: adaptive-strength
     content: Add optional deterministic adaptive strength from balanced referee analysis of qualifying human moves.
-    status: in_progress
+    status: completed
   - id: clients
     content: Build the shared board UI, web app, Tauri shell, and anonymous Convex rooms.
     status: in_progress
   - id: acceptance
     content: Run the complete native, WASM, browser, Convex, and desktop acceptance suite and rewrite the README.
-    status: pending
+    status: in_progress
 isProject: false
 ---
 

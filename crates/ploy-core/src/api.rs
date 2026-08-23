@@ -6,7 +6,7 @@ use crate::moves::{
 };
 use crate::setup::initial_snapshot;
 use crate::terminal::same_side as same_side_inner;
-use crate::types::{Color, Mode, Move, OpponentStyle, SearchResult, Snapshot};
+use crate::types::{Color, Mode, Move, MoveReview, OpponentStyle, SearchResult, Snapshot};
 use crate::validate::validate_snapshot;
 
 pub const SPIKE_FROM: u8 = 22;
@@ -77,6 +77,24 @@ pub fn choose_move_with_profile(
         random_seed,
         style,
         max_score_loss,
+    )
+}
+
+pub fn review_move(
+    snapshot: &Snapshot,
+    color: Color,
+    played_move: &Move,
+    max_depth: u32,
+    max_nodes: u64,
+    random_seed: u32,
+) -> Result<MoveReview, RulesError> {
+    crate::search::review_move(
+        snapshot,
+        color,
+        played_move,
+        max_depth,
+        max_nodes,
+        random_seed,
     )
 }
 

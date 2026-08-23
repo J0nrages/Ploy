@@ -13,7 +13,13 @@ export type {
 } from "./types";
 
 export { RulesError } from "./errors";
-export { wrapInstance, type RulesAdapter, type SearchResult } from "./runtime";
+export {
+  wrapInstance,
+  type MoveReview,
+  type MoveReviewRequest,
+  type RulesAdapter,
+  type SearchResult,
+} from "./runtime";
 export { SPIKE_MOVE } from "./spike-fixture";
 
 import { RulesError } from "./errors";

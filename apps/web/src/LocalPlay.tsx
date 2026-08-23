@@ -22,6 +22,16 @@ import {
   type ControlsPlacement,
 } from "@ploy/ui-board";
 import {
+  appendAdaptiveSample,
+  clampStrength,
+  createAdaptiveStrengthSettings,
+  deriveAdaptiveStrength,
+  strengthIndex,
+  trimAdaptiveSamples,
+  type AdaptiveSample,
+  type AdaptiveStrengthSettings,
+} from "./adaptiveStrength";
+import {
   createLocalGameId,
   createGameSeed,
   deleteLocalGame,
@@ -36,6 +46,10 @@ import { PlayHud } from "./PlayHud";
 import { RulesHelp } from "./RulesHelp";
 import { snapshotTurnKey, type ComputerMoveOperation } from "./computerTurn";
 import { useComputerTurn } from "./useComputerTurn";
+import {
+  useAdaptiveReferee,
+  type PendingHumanReview,
+} from "./useAdaptiveReferee";
 
 type LocalView = "setup" | "play";
 
@@ -61,6 +75,13 @@ export function LocalPlay(props: { onBack: () => void }) {
   const [style, setStyle] = useState<OpponentStyle>(
     latestGame?.settings.style ?? "balanced",
   );
+  const [adaptive, setAdaptive] = useState<AdaptiveStrengthSettings>(
+    latestGame?.settings.adaptive ?? createAdaptiveStrengthSettings(strength),
+  );
+  const [adaptiveSamples, setAdaptiveSamples] = useState<AdaptiveSample[]>(
+    latestGame?.adaptiveSamples ?? [],
+  );
+  const [pendingReviews, setPendingReviews] = useState<PendingHumanReview[]>([]);
   const [gameSeed, setGameSeed] = useState(latestGame?.settings.gameSeed ?? createGameSeed);
   const [profileRevision, setProfileRevision] = useState(
     latestGame?.settings.profileRevision ?? 0,
@@ -74,6 +95,10 @@ export function LocalPlay(props: { onBack: () => void }) {
   const [history, setHistory] = useState<Snapshot[]>(() => latestGame?.history ?? []);
   const [error, setError] = useState<string | null>(null);
   const [saveAvailable, setSaveAvailable] = useState(true);
+  const adaptiveState = useMemo(
+    () => deriveAdaptiveStrength(adaptive, adaptiveSamples),
+    [adaptive, adaptiveSamples],
+  );
 
   const acting = controllerForTurn(snapshot);
   const computerEnabled =
@@ -89,10 +114,11 @@ export function LocalPlay(props: { onBack: () => void }) {
       return;
     }
     const game: LocalGameSave = {
-      version: 3,
+      version: 4,
       id: currentGameId,
       snapshot,
       history,
+      adaptiveSamples,
       settings: {
         mode: snapshot.mode,
         playKind,
@@ -101,6 +127,7 @@ export function LocalPlay(props: { onBack: () => void }) {
         gameSeed,
         profileRevision,
         humanColor,
+        adaptive,
       },
       createdAt: currentGameCreatedAt,
       updatedAt: Date.now(),
@@ -110,6 +137,8 @@ export function LocalPlay(props: { onBack: () => void }) {
   }, [
     currentGameCreatedAt,
     currentGameId,
+    adaptive,
+    adaptiveSamples,
     gameSeed,
     history,
     humanColor,
@@ -129,6 +158,23 @@ export function LocalPlay(props: { onBack: () => void }) {
       const next = applyMove(snapshot, move, acting);
       setHistory((prev) => [...prev, snapshot]);
       setSnapshot(next);
+      if (
+        !operation &&
+        adaptive.enabled &&
+        playKind === "computer" &&
+        currentGameId &&
+        acting === humanColor
+      ) {
+        setPendingReviews((reviews) => [
+          ...reviews,
+          {
+            key: `${currentGameId}:${snapshot.ply}`,
+            snapshot,
+            color: acting,
+            move,
+          },
+        ]);
+      }
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "illegal move");
@@ -153,13 +199,77 @@ export function LocalPlay(props: { onBack: () => void }) {
     onError: setError,
   });
 
+  const referee = useAdaptiveReferee({
+    pending: pendingReviews[0] ?? null,
+    enabled: view === "play" && playKind === "computer" && adaptive.enabled,
+    gameSeed,
+    onSettled: (pending, review) => {
+      setPendingReviews((reviews) => reviews.filter((item) => item.key !== pending.key));
+      if (!review) {
+        return;
+      }
+      setAdaptiveSamples((samples) =>
+        appendAdaptiveSample(samples, {
+          ply: pending.snapshot.ply,
+          depth: review.depth,
+          scoreLoss: review.scoreLoss,
+          legalMoveCount: review.legalMoveCount,
+          fallback: review.fallback,
+        }),
+      );
+    },
+  });
+
+  useEffect(() => {
+    if (
+      view !== "play" ||
+      !adaptive.enabled ||
+      adaptiveState.strength === strength
+    ) {
+      return;
+    }
+    setStrength(adaptiveState.strength);
+    setProfileRevision((revision) => revision + 1);
+  }, [adaptive.enabled, adaptiveState.strength, strength, view]);
+
   const updateStrength = (next: Strength): void => {
     if (next === strength) {
       return;
     }
     setStrength(next);
+    setAdaptive((settings) => ({ ...settings, baseStrength: next }));
+    setAdaptiveSamples([]);
+    setPendingReviews([]);
     if (view === "play") {
       setProfileRevision((revision) => revision + 1);
+    }
+  };
+
+  const updateAdaptiveEnabled = (enabled: boolean): void => {
+    setAdaptive((settings) => ({ ...settings, enabled, baseStrength: strength }));
+    setAdaptiveSamples([]);
+    setPendingReviews([]);
+  };
+
+  const updateAdaptiveBounds = (minimum: Strength, maximum: Strength): void => {
+    const orderedMinimum =
+      strengthIndex(minimum) <= strengthIndex(maximum) ? minimum : maximum;
+    const orderedMaximum =
+      strengthIndex(minimum) <= strengthIndex(maximum) ? maximum : minimum;
+    const nextStrength = clampStrength(strength, orderedMinimum, orderedMaximum);
+    setAdaptive((settings) => ({
+      ...settings,
+      minimum: orderedMinimum,
+      maximum: orderedMaximum,
+      baseStrength: nextStrength,
+    }));
+    setAdaptiveSamples([]);
+    setPendingReviews([]);
+    if (nextStrength !== strength) {
+      setStrength(nextStrength);
+      if (view === "play") {
+        setProfileRevision((revision) => revision + 1);
+      }
     }
   };
 
@@ -196,6 +306,9 @@ export function LocalPlay(props: { onBack: () => void }) {
     setCurrentGameCreatedAt(now);
     setGameSeed(createGameSeed());
     setProfileRevision(0);
+    setAdaptive((settings) => ({ ...settings, baseStrength: strength }));
+    setAdaptiveSamples([]);
+    setPendingReviews([]);
     setPlayKind(nextPlayKind);
     setSnapshot(createGame(mode));
     setHistory([]);
@@ -216,6 +329,9 @@ export function LocalPlay(props: { onBack: () => void }) {
     setGameSeed(game.settings.gameSeed);
     setProfileRevision(game.settings.profileRevision);
     setHumanColor(game.settings.humanColor);
+    setAdaptive(game.settings.adaptive);
+    setAdaptiveSamples(game.adaptiveSamples);
+    setPendingReviews([]);
     setSnapshot(game.snapshot);
     setHistory(game.history);
     setError(null);
@@ -351,6 +467,13 @@ export function LocalPlay(props: { onBack: () => void }) {
                         ))}
                     </div>
                   </fieldset>
+                  <AdaptiveStrengthControls
+                    settings={adaptive}
+                    currentStrength={strength}
+                    qualifyingMoves={adaptiveState.qualifyingMoves}
+                    onEnabledChange={updateAdaptiveEnabled}
+                    onBoundsChange={updateAdaptiveBounds}
+                  />
                   <fieldset>
                     <legend>Style</legend>
                     <div className="option-pills option-pills-styles">
@@ -431,6 +554,10 @@ export function LocalPlay(props: { onBack: () => void }) {
           if (previous) {
             setSnapshot(previous);
             setHistory(history.slice(0, -1));
+            setAdaptiveSamples((samples) => trimAdaptiveSamples(samples, previous.ply));
+            setPendingReviews((reviews) =>
+              reviews.filter((review) => review.snapshot.ply < previous.ply),
+            );
             interaction.cancel();
           }
         }}
@@ -487,7 +614,11 @@ export function LocalPlay(props: { onBack: () => void }) {
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Computer profile</p>
-                <h2>{`${strengthName(strength)} · ${styleName(style)}`}</h2>
+                <h2>
+                  {adaptive.enabled
+                    ? `Adaptive (${strengthName(strength)} now) · ${styleName(style)}`
+                    : `${strengthName(strength)} · ${styleName(style)}`}
+                </h2>
               </div>
               <span className="profile-revision">Revision {profileRevision}</span>
             </div>
@@ -510,6 +641,13 @@ export function LocalPlay(props: { onBack: () => void }) {
                 ))}
               </div>
             </fieldset>
+            <AdaptiveStrengthControls
+              settings={adaptive}
+              currentStrength={strength}
+              qualifyingMoves={adaptiveState.qualifyingMoves}
+              onEnabledChange={updateAdaptiveEnabled}
+              onBoundsChange={updateAdaptiveBounds}
+            />
             <fieldset>
               <legend>Style</legend>
               <div className="option-pills option-pills-styles">
@@ -542,6 +680,19 @@ export function LocalPlay(props: { onBack: () => void }) {
                     <dt>Variation</dt>
                     <dd>{computer.lastResult.principalVariation.length} plies</dd>
                   </div>
+                  {adaptive.enabled ? (
+                    <>
+                      <div><dt>Referee</dt><dd>{referee.thinking ? "reviewing" : "idle"}</dd></div>
+                      <div><dt>Qualifying reviews</dt><dd>{adaptiveState.qualifyingMoves}</dd></div>
+                      <div><dt>Adjustments</dt><dd>{adaptiveState.adjustments}</dd></div>
+                      {referee.lastReview ? (
+                        <div><dt>Last human loss</dt><dd>{referee.lastReview.scoreLoss}</dd></div>
+                      ) : null}
+                      {referee.lastError ? (
+                        <div><dt>Referee error</dt><dd>{referee.lastError}</dd></div>
+                      ) : null}
+                    </>
+                  ) : null}
                 </dl>
               </details>
             ) : null}
@@ -613,6 +764,81 @@ function moveHint(acting: Color | null, legalCount: number, selected: boolean): 
     return "Choose a glowing destination or a rotation. Press Escape to cancel.";
   }
   return `Select a ${colorName(acting)} piece to move or rotate. ${legalCount} legal choices available.`;
+}
+
+function AdaptiveStrengthControls(props: {
+  settings: AdaptiveStrengthSettings;
+  currentStrength: Strength;
+  qualifyingMoves: number;
+  onEnabledChange: (enabled: boolean) => void;
+  onBoundsChange: (minimum: Strength, maximum: Strength) => void;
+}) {
+  return (
+    <fieldset className="adaptive-strength-settings">
+      <legend>
+        Adaptive strength <span className="experimental-badge">Experimental</span>
+      </legend>
+      <label className="adaptive-toggle">
+        <input
+          type="checkbox"
+          checked={props.settings.enabled}
+          onChange={(event) => props.onEnabledChange(event.target.checked)}
+        />
+        <span>
+          <strong>Adjust to my play</strong>
+          <small>Uses balanced analysis of your moves; style never changes.</small>
+        </span>
+      </label>
+      {props.settings.enabled ? (
+        <>
+          <div className="adaptive-bounds">
+            <label>
+              Minimum
+              <select
+                value={props.settings.minimum}
+                onChange={(event) =>
+                  props.onBoundsChange(
+                    event.target.value as Strength,
+                    props.settings.maximum,
+                  )
+                }
+              >
+                {STRENGTHS.filter(
+                  (level) => strengthIndex(level) <= strengthIndex(props.settings.maximum),
+                ).map((level) => (
+                  <option key={level} value={level}>{strengthName(level)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Maximum
+              <select
+                value={props.settings.maximum}
+                onChange={(event) =>
+                  props.onBoundsChange(
+                    props.settings.minimum,
+                    event.target.value as Strength,
+                  )
+                }
+              >
+                {STRENGTHS.filter(
+                  (level) => strengthIndex(level) >= strengthIndex(props.settings.minimum),
+                ).map((level) => (
+                  <option key={level} value={level}>{strengthName(level)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="hint adaptive-status">
+            Current: {strengthName(props.currentStrength)} · {props.qualifyingMoves} qualifying
+            {props.qualifyingMoves === 1 ? " move" : " moves"} reviewed
+          </p>
+        </>
+      ) : (
+        <p className="hint adaptive-status">Off. The selected strength stays fixed.</p>
+      )}
+    </fieldset>
+  );
 }
 
 function ChoiceButton(props: {

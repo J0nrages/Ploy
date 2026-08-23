@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createGame, initializeRules, isLegal } from "@ploy/rules";
+import { createGame, initializeRules, isLegal, legalMoves } from "@ploy/rules";
 import { AiError, createPloyBot, searchOptionsForProfile } from "./index";
 
 test("AiError is constructible", () => {
@@ -30,6 +30,26 @@ test("worker chooses a legal two-player move", async () => {
   );
   expect(result.nodes).toBeGreaterThan(0);
   expect(isLegal(snapshot, result.move, "green")).toBe(true);
+  bot.terminate();
+});
+
+test("worker referee scores the actual human move with balanced search", async () => {
+  await initializeRules();
+  const bot = createPloyBot();
+  const snapshot = createGame("twoPlayer");
+  const moves = legalMoves(snapshot, "green");
+  const playedMove = moves.at(-1)!;
+  const review = await bot.reviewMove(
+    snapshot,
+    "green",
+    playedMove,
+    { maxTimeMs: 5_000, maxDepth: 1, maxNodes: 100_000, randomSeed: 9 },
+    new AbortController().signal,
+  );
+  expect(review.legalMoveCount).toBe(moves.length);
+  expect(review.depth).toBe(1);
+  expect(review.scoreLoss).toBe(review.bestScore - review.playedScore);
+  expect(isLegal(snapshot, review.bestMove, "green")).toBe(true);
   bot.terminate();
 });
 

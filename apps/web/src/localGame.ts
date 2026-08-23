@@ -5,6 +5,12 @@ import {
   type Strength,
 } from "@ploy/ai";
 import { parseSnapshot, type Color, type Mode, type Snapshot } from "@ploy/rules";
+import {
+  createAdaptiveStrengthSettings,
+  strengthIndex,
+  type AdaptiveSample,
+  type AdaptiveStrengthSettings,
+} from "./adaptiveStrength";
 
 export type LocalPlayKind = "hotseat" | "computer";
 
@@ -16,30 +22,34 @@ export type LocalGameSettings = {
   gameSeed: number;
   profileRevision: number;
   humanColor: Extract<Color, "green" | "coral">;
+  adaptive: AdaptiveStrengthSettings;
 };
 
 export type LocalGameSave = {
-  version: 3;
+  version: 4;
   id: string;
   snapshot: Snapshot;
   history: Snapshot[];
+  adaptiveSamples: AdaptiveSample[];
   settings: LocalGameSettings;
   createdAt: number;
   updatedAt: number;
 };
 
 type LocalGameLibrary = {
-  version: 3;
+  version: 4;
   games: LocalGameSave[];
 };
 
 type ParsedContents = {
   snapshot: Snapshot;
   history: Snapshot[];
+  adaptiveSamples: AdaptiveSample[];
   settings: LocalGameSettings;
 };
 
-const LOCAL_GAMES_KEY = "ploy.localGames.v3";
+const LOCAL_GAMES_KEY = "ploy.localGames.v4";
+const V3_LOCAL_GAMES_KEY = "ploy.localGames.v3";
 const V2_LOCAL_GAMES_KEY = "ploy.localGames.v2";
 const LEGACY_LOCAL_GAME_KEY = "ploy.localGame.v1";
 
@@ -49,6 +59,32 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isUint32(value: unknown): value is number {
   return Number.isInteger(value) && typeof value === "number" && value >= 0 && value <= 0xffffffff;
+}
+
+function parseStrength(value: unknown): Strength | null {
+  return STRENGTHS.find((item) => item === value) ?? null;
+}
+
+function parseAdaptiveSample(value: unknown): AdaptiveSample | null {
+  if (
+    !isRecord(value) ||
+    !isUint32(value.ply) ||
+    !isUint32(value.depth) ||
+    !Number.isFinite(value.scoreLoss) ||
+    typeof value.scoreLoss !== "number" ||
+    value.scoreLoss < 0 ||
+    !isUint32(value.legalMoveCount) ||
+    (value.fallback !== "none" && value.fallback !== "static")
+  ) {
+    return null;
+  }
+  return {
+    ply: value.ply,
+    depth: value.depth,
+    scoreLoss: value.scoreLoss,
+    legalMoveCount: value.legalMoveCount,
+    fallback: value.fallback,
+  };
 }
 
 function parseContents(value: Record<string, unknown>): ParsedContents | null {
@@ -61,8 +97,7 @@ function parseContents(value: Record<string, unknown>): ParsedContents | null {
     settings.playKind === "hotseat" || settings.playKind === "computer"
       ? settings.playKind
       : null;
-  const strength =
-    STRENGTHS.find((item) => item === (settings.strength ?? settings.difficulty)) ?? null;
+  const strength = parseStrength(settings.strength ?? settings.difficulty);
   const style = OPPONENT_STYLES.find((item) => item === settings.style) ?? "balanced";
   const humanColor =
     settings.humanColor === "green" || settings.humanColor === "coral"
@@ -76,10 +111,33 @@ function parseContents(value: Record<string, unknown>): ParsedContents | null {
   try {
     const snapshot = parseSnapshot(value.snapshot);
     const history = value.history.map((item) => parseSnapshot(item));
+    const parsedSamples = Array.isArray(value.adaptiveSamples)
+      ? value.adaptiveSamples.map(parseAdaptiveSample)
+      : [];
+    if (parsedSamples.some((sample) => sample === null)) {
+      return null;
+    }
+    const adaptiveSamples = parsedSamples.filter(
+      (sample): sample is AdaptiveSample => sample !== null,
+    );
+    const adaptiveValue = isRecord(settings.adaptive) ? settings.adaptive : null;
+    const defaults = createAdaptiveStrengthSettings(strength);
+    const minimum = parseStrength(adaptiveValue?.minimum) ?? defaults.minimum;
+    const maximum = parseStrength(adaptiveValue?.maximum) ?? defaults.maximum;
+    const adaptive: AdaptiveStrengthSettings = {
+      enabled: adaptiveValue?.enabled === true,
+      minimum:
+        strengthIndex(minimum) <= strengthIndex(maximum) ? minimum : maximum,
+      maximum:
+        strengthIndex(minimum) <= strengthIndex(maximum) ? maximum : minimum,
+      baseStrength: parseStrength(adaptiveValue?.baseStrength) ?? strength,
+    };
     if (
       settings.mode !== snapshot.mode ||
       history.some((item) => item.mode !== snapshot.mode || item.ply >= snapshot.ply) ||
-      (playKind === "computer" && snapshot.mode !== "twoPlayer")
+      (playKind === "computer" && snapshot.mode !== "twoPlayer") ||
+      new Set(adaptiveSamples.map((sample) => sample.ply)).size !== adaptiveSamples.length ||
+      adaptiveSamples.some((sample) => sample.ply >= snapshot.ply)
     ) {
       return null;
     }
@@ -91,6 +149,7 @@ function parseContents(value: Record<string, unknown>): ParsedContents | null {
     return {
       snapshot,
       history,
+      adaptiveSamples: adaptiveSamples.sort((left, right) => left.ply - right.ply),
       settings: {
         mode: snapshot.mode,
         playKind,
@@ -99,6 +158,7 @@ function parseContents(value: Record<string, unknown>): ParsedContents | null {
         gameSeed: isUint32(settings.gameSeed) ? settings.gameSeed : fallbackSeed,
         profileRevision: isUint32(settings.profileRevision) ? settings.profileRevision : 0,
         humanColor,
+        adaptive,
       },
     };
   } catch {
@@ -109,7 +169,7 @@ function parseContents(value: Record<string, unknown>): ParsedContents | null {
 export function parseLocalGameSave(value: unknown): LocalGameSave | null {
   if (
     !isRecord(value) ||
-    (value.version !== 2 && value.version !== 3) ||
+    (value.version !== 2 && value.version !== 3 && value.version !== 4) ||
     typeof value.id !== "string" ||
     value.id.length === 0 ||
     typeof value.createdAt !== "number" ||
@@ -124,7 +184,7 @@ export function parseLocalGameSave(value: unknown): LocalGameSave | null {
   }
 
   return {
-    version: 3,
+    version: 4,
     id: value.id,
     ...contents,
     createdAt: value.createdAt,
@@ -142,7 +202,7 @@ function parseLegacySingleSave(value: unknown): LocalGameSave | null {
     return null;
   }
   return {
-    version: 3,
+    version: 4,
     id: createLocalGameId(),
     ...contents,
     createdAt: savedAt,
@@ -153,7 +213,7 @@ function parseLegacySingleSave(value: unknown): LocalGameSave | null {
 function parseLocalGameLibrary(value: unknown): LocalGameLibrary | null {
   if (
     !isRecord(value) ||
-    (value.version !== 2 && value.version !== 3) ||
+    (value.version !== 2 && value.version !== 3 && value.version !== 4) ||
     !Array.isArray(value.games)
   ) {
     return null;
@@ -166,7 +226,7 @@ function parseLocalGameLibrary(value: unknown): LocalGameLibrary | null {
   if (new Set(validGames.map((game) => game.id)).size !== validGames.length) {
     return null;
   }
-  return { version: 3, games: sortGames(validGames) };
+  return { version: 4, games: sortGames(validGames) };
 }
 
 function localStorageOrNull(): Storage | null {
@@ -212,7 +272,7 @@ export function upsertLocalGame(
 function persistLibrary(storage: Storage, games: LocalGameSave[]): void {
   storage.setItem(
     LOCAL_GAMES_KEY,
-    JSON.stringify({ version: 3, games: sortGames(games) } satisfies LocalGameLibrary),
+    JSON.stringify({ version: 4, games: sortGames(games) } satisfies LocalGameLibrary),
   );
 }
 
@@ -232,15 +292,18 @@ export function loadLocalGames(): LocalGameSave[] {
       storage.removeItem(LOCAL_GAMES_KEY);
     }
 
-    const v2Encoded = storage.getItem(V2_LOCAL_GAMES_KEY);
-    if (v2Encoded) {
-      const migrated = parseLocalGameLibrary(JSON.parse(v2Encoded) as unknown);
+    for (const legacyKey of [V3_LOCAL_GAMES_KEY, V2_LOCAL_GAMES_KEY]) {
+      const legacyEncoded = storage.getItem(legacyKey);
+      if (!legacyEncoded) {
+        continue;
+      }
+      const migrated = parseLocalGameLibrary(JSON.parse(legacyEncoded) as unknown);
       if (migrated) {
         persistLibrary(storage, migrated.games);
-        storage.removeItem(V2_LOCAL_GAMES_KEY);
+        storage.removeItem(legacyKey);
         return migrated.games;
       }
-      storage.removeItem(V2_LOCAL_GAMES_KEY);
+      storage.removeItem(legacyKey);
     }
 
     const legacyEncoded = storage.getItem(LEGACY_LOCAL_GAME_KEY);

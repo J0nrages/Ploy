@@ -538,6 +538,10 @@ fieldset legend {
   padding: 0;
 }
 
+.computer-settings fieldset + fieldset {
+  margin-top: 0.85rem;
+}
+
 .option-pills {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -564,6 +568,57 @@ fieldset legend {
   color: #bda9d6;
   font-size: 0.72rem;
   white-space: nowrap;
+}
+
+.computer-settings .adaptive-strength-settings {
+  border-top: 1px solid rgba(76, 201, 240, 0.18);
+  margin-top: 0.85rem;
+  padding-top: 0.2rem;
+}
+
+.experimental-badge {
+  border: 1px solid rgba(244, 211, 94, 0.52);
+  border-radius: 999px;
+  color: #f4d35e;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.35rem;
+  text-transform: uppercase;
+}
+
+.adaptive-toggle {
+  align-items: flex-start;
+  flex-direction: row;
+  gap: 0.65rem;
+}
+
+.adaptive-toggle input {
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
+  width: 1rem;
+}
+
+.adaptive-toggle span,
+.adaptive-toggle strong,
+.adaptive-toggle small {
+  display: block;
+}
+
+.adaptive-toggle small {
+  color: #bda9d6;
+  line-height: 1.35;
+  margin-top: 0.2rem;
+}
+
+.adaptive-bounds {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.adaptive-status {
+  margin-bottom: 0;
 }
 
 .ai-diagnostics {

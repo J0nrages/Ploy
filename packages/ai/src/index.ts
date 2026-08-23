@@ -1,4 +1,6 @@
-import type { Color, Move, Snapshot } from "@ploy/rules";
+import type { Color, Move, MoveReview, Snapshot } from "@ploy/rules";
+
+export type { MoveReview } from "@ploy/rules";
 
 export type Strength = "cadet" | "navigator" | "commander" | "strategist";
 export type Difficulty = Strength;
@@ -38,6 +40,13 @@ export type SearchOptions = {
   maxScoreLoss?: number;
 };
 
+export type ReviewOptions = {
+  maxTimeMs: number;
+  maxDepth?: number;
+  maxNodes: number;
+  randomSeed: number;
+};
+
 export type SearchResult = {
   move: Move;
   depth: number;
@@ -73,8 +82,22 @@ export interface PloyBot {
     options: SearchOptions,
     signal: AbortSignal,
   ): Promise<SearchResult>;
+  reviewMove(
+    snapshot: Snapshot,
+    color: Color,
+    playedMove: Move,
+    options: ReviewOptions,
+    signal: AbortSignal,
+  ): Promise<MoveReview>;
   terminate(): void;
 }
+
+export const REFEREE_BUDGET: ReviewOptions = {
+  maxTimeMs: 1_500,
+  maxDepth: 4,
+  maxNodes: 75_000,
+  randomSeed: 0,
+};
 
 export const STRENGTH_BUDGETS: Record<Strength, SearchOptions> = {
   cadet: {
@@ -127,6 +150,13 @@ export function searchOptionsForProfile(
   };
 }
 
+export function reviewOptionsForTurn(gameSeed: number, ply: number): ReviewOptions {
+  return {
+    ...REFEREE_BUDGET,
+    randomSeed: deriveTurnSeed(gameSeed ^ 0x52454645, ply, 0),
+  };
+}
+
 function deriveTurnSeed(gameSeed: number, ply: number, profileRevision: number): number {
   let value = gameSeed >>> 0;
   value ^= Math.imul((ply + 1) >>> 0, 0x9e3779b1);
@@ -140,6 +170,7 @@ function deriveTurnSeed(gameSeed: number, ply: number, profileRevision: number):
 type WorkerResponse =
   | { type: "ready" }
   | { type: "result"; requestId: number; result: SearchResult }
+  | { type: "reviewResult"; requestId: number; result: MoveReview }
   | { type: "error"; requestId: number; message: string }
   | { type: "fatal"; message: string };
 
@@ -200,11 +231,70 @@ export function createPloyBot(): PloyBot {
         inFlight = false;
       }
     },
+    async reviewMove(snapshot, color, playedMove, options, signal) {
+      if (terminated) {
+        throw new AiError("engineFailure", "computer opponent is terminated");
+      }
+      if (inFlight) {
+        throw new AiError("engineFailure", "computer opponent is already thinking");
+      }
+      inFlight = true;
+      try {
+        await ready;
+        if (signal.aborted) {
+          throw new AiError("aborted");
+        }
+        const requestId = nextId;
+        nextId += 1;
+        return await requestReview(
+          worker,
+          requestId,
+          snapshot,
+          color,
+          playedMove,
+          options,
+          signal,
+          recreate,
+        );
+      } finally {
+        inFlight = false;
+      }
+    },
     terminate() {
       terminated = true;
       worker.terminate();
     },
   };
+}
+
+function requestReview(
+  requestWorker: Worker,
+  requestId: number,
+  snapshot: Snapshot,
+  color: Color,
+  playedMove: Move,
+  options: ReviewOptions,
+  signal: AbortSignal,
+  recreate: () => void,
+): Promise<MoveReview> {
+  return requestWorkerResult(
+    requestWorker,
+    requestId,
+    {
+      type: "review",
+      requestId,
+      snapshot,
+      color,
+      playedMove,
+      maxDepth: options.maxDepth,
+      maxNodes: options.maxNodes,
+      randomSeed: options.randomSeed,
+    },
+    "reviewResult",
+    options.maxTimeMs,
+    signal,
+    recreate,
+  );
 }
 
 function requestMove(
@@ -216,9 +306,39 @@ function requestMove(
   signal: AbortSignal,
   recreate: () => void,
 ): Promise<SearchResult> {
+  return requestWorkerResult(
+    requestWorker,
+    requestId,
+    {
+      type: "choose",
+      requestId,
+      snapshot,
+      color,
+      maxDepth: options.maxDepth,
+      maxNodes: options.maxNodes,
+      randomSeed: options.randomSeed,
+      style: options.style,
+      maxScoreLoss: options.maxScoreLoss,
+    },
+    "result",
+    options.maxTimeMs,
+    signal,
+    recreate,
+  );
+}
+
+function requestWorkerResult<T>(
+  requestWorker: Worker,
+  requestId: number,
+  message: unknown,
+  resultType: "result" | "reviewResult",
+  maxTimeMs: number,
+  signal: AbortSignal,
+  recreate: () => void,
+): Promise<T> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const timer = setTimeout(() => fail(new AiError("timeout"), true), options.maxTimeMs);
+    const timer = setTimeout(() => fail(new AiError("timeout"), true), maxTimeMs);
 
     const cleanup = (): void => {
       clearTimeout(timer);
@@ -254,25 +374,17 @@ function requestMove(
       cleanup();
       if (event.data.type === "error") {
         reject(mapEngineError(event.data.message));
+      } else if (event.data.type === resultType) {
+        resolve(event.data.result as T);
       } else {
-        resolve(event.data.result);
+        reject(new AiError("engineFailure", "worker returned the wrong result type"));
       }
     };
 
     signal.addEventListener("abort", onAbort, { once: true });
     requestWorker.addEventListener("message", onMessage);
     requestWorker.addEventListener("error", onError);
-    requestWorker.postMessage({
-      type: "choose",
-      requestId,
-      snapshot,
-      color,
-      maxDepth: options.maxDepth,
-      maxNodes: options.maxNodes,
-      randomSeed: options.randomSeed,
-      style: options.style,
-      maxScoreLoss: options.maxScoreLoss,
-    });
+    requestWorker.postMessage(message);
   });
 }
 

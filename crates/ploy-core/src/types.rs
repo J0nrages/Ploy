@@ -197,6 +197,20 @@ pub struct SearchResult {
     pub fallback: SearchFallback,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveReview {
+    pub best_move: Move,
+    pub depth: u32,
+    pub nodes: u64,
+    pub played_score: i32,
+    pub best_score: i32,
+    pub score_loss: i32,
+    pub legal_move_count: u32,
+    pub principal_variation: Vec<Move>,
+    pub fallback: SearchFallback,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SearchFallback {

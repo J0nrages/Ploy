@@ -12,7 +12,8 @@ use crate::movegen::{
 };
 use crate::moves::controller_for_turn;
 use crate::types::{
-    Color, Mode, Move, OpponentStyle, SearchFallback, SearchResult, Snapshot, Variant, WinnerKind,
+    Color, Mode, Move, MoveReview, OpponentStyle, SearchFallback, SearchResult, Snapshot, Variant,
+    WinnerKind,
 };
 use crate::validate::validate_snapshot;
 
@@ -81,6 +82,11 @@ struct Undo {
 #[derive(Debug, Clone, Copy)]
 struct BudgetExhausted;
 
+struct SearchOutcome {
+    result: SearchResult,
+    root_scores: Vec<(Move, i32)>,
+}
+
 pub fn choose_move(
     snapshot: &Snapshot,
     color: Color,
@@ -109,6 +115,64 @@ pub fn choose_move_with_profile(
     style: OpponentStyle,
     max_score_loss: i32,
 ) -> Result<SearchResult, RulesError> {
+    search_position(
+        snapshot,
+        color,
+        max_depth,
+        max_nodes,
+        random_seed,
+        style,
+        max_score_loss,
+    )
+    .map(|outcome| outcome.result)
+}
+
+pub fn review_move(
+    snapshot: &Snapshot,
+    color: Color,
+    played_move: &Move,
+    max_depth: u32,
+    max_nodes: u64,
+    random_seed: u32,
+) -> Result<MoveReview, RulesError> {
+    let outcome = search_position(
+        snapshot,
+        color,
+        max_depth,
+        max_nodes,
+        random_seed,
+        OpponentStyle::Balanced,
+        0,
+    )?;
+    let played_score = outcome
+        .root_scores
+        .iter()
+        .find_map(|(mv, score)| (mv == played_move).then_some(*score))
+        .ok_or_else(|| RulesError::new("invalidMove", "reviewed move is not legal"))?;
+    let result = outcome.result;
+    Ok(MoveReview {
+        best_move: result.mv,
+        depth: result.depth,
+        nodes: result.nodes,
+        played_score,
+        best_score: result.best_score,
+        score_loss: result.best_score.saturating_sub(played_score).max(0),
+        legal_move_count: outcome.root_scores.len() as u32,
+        principal_variation: result.principal_variation,
+        fallback: result.fallback,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn search_position(
+    snapshot: &Snapshot,
+    color: Color,
+    max_depth: u32,
+    max_nodes: u64,
+    random_seed: u32,
+    style: OpponentStyle,
+    max_score_loss: i32,
+) -> Result<SearchOutcome, RulesError> {
     validate_snapshot(snapshot)?;
     if snapshot.mode != Mode::TwoPlayer {
         return Err(RulesError::new(
@@ -129,19 +193,6 @@ pub fn choose_move_with_profile(
 
     let score_loss_limit = max_score_loss.max(0);
 
-    // Cadet chooses deterministically among evaluated candidates within its
-    // controlled-error limit instead of returning an arbitrary legal move.
-    if max_depth <= 1 && node_limit <= 250 {
-        return Ok(cadet_move(
-            &mut position,
-            &root_moves,
-            random_seed,
-            node_limit,
-            style,
-            score_loss_limit,
-        ));
-    }
-
     let mut root_scores = static_root_scores(&mut position, root_moves, style);
     root_scores.sort_by(|(left_move, left_score), (right_move, right_score)| {
         right_score.cmp(left_score).then_with(|| {
@@ -149,6 +200,17 @@ pub fn choose_move_with_profile(
                 .cmp(&stable_move_noise(right_move, random_seed))
         })
     });
+
+    // Cadet chooses deterministically among evaluated candidates within its
+    // controlled-error limit instead of returning an arbitrary legal move.
+    if max_depth <= 1 && node_limit <= 250 {
+        let result = cadet_move(&root_scores, random_seed, node_limit, score_loss_limit);
+        return Ok(SearchOutcome {
+            result,
+            root_scores,
+        });
+    }
+
     let (fallback, fallback_score) = root_scores[0].clone();
     let mut searcher = Searcher::new(node_limit, random_seed, style);
     let mut best = SearchResult {
@@ -210,7 +272,10 @@ pub fn choose_move_with_profile(
 
     best.nodes = searcher.nodes;
     best.principal_variation = searcher.principal_variation(&position, &best.mv, best.depth);
-    Ok(best)
+    Ok(SearchOutcome {
+        result: best,
+        root_scores,
+    })
 }
 
 fn static_root_scores(
@@ -231,19 +296,11 @@ fn static_root_scores(
 }
 
 fn cadet_move(
-    position: &mut Position,
-    moves: &[Move],
+    scored: &[(Move, i32)],
     seed: u32,
     max_nodes: u64,
-    style: OpponentStyle,
     max_score_loss: i32,
 ) -> SearchResult {
-    let mut scored = static_root_scores(position, moves.to_vec(), style);
-    scored.sort_by(|(left_move, left_score), (right_move, right_score)| {
-        right_score.cmp(left_score).then_with(|| {
-            stable_move_noise(left_move, seed).cmp(&stable_move_noise(right_move, seed))
-        })
-    });
     let best_score = scored[0].1;
     let candidates: Vec<&(Move, i32)> = scored
         .iter()
@@ -1054,6 +1111,28 @@ mod tests {
             position.moves(),
             crate::moves::legal_moves_generated(&snapshot, Color::Green)
         );
+    }
+
+    #[test]
+    fn balanced_referee_scores_the_move_the_human_played() {
+        let snapshot = initial_snapshot(Mode::TwoPlayer);
+        let moves = crate::moves::legal_moves_generated(&snapshot, Color::Green);
+        let played = moves.last().expect("opening has legal moves").clone();
+        let review = review_move(&snapshot, Color::Green, &played, 1, 100_000, 7).unwrap();
+
+        assert_eq!(review.legal_move_count, moves.len() as u32);
+        assert_eq!(review.depth, 1);
+        assert_eq!(review.score_loss, review.best_score - review.played_score);
+        assert!(moves.contains(&review.best_move));
+    }
+
+    #[test]
+    fn balanced_referee_rejects_a_move_outside_the_root_position() {
+        let snapshot = initial_snapshot(Mode::TwoPlayer);
+        let invalid = Move::Rotate { at: 40, steps: 1 };
+        let error = review_move(&snapshot, Color::Green, &invalid, 1, 100_000, 7)
+            .expect_err("invalid review target must be rejected");
+        assert_eq!(error.code, "invalidMove");
     }
 
     #[test]
