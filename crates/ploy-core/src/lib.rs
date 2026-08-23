@@ -21,8 +21,8 @@ pub use api::{
 };
 pub use error::{ErrorBody, RulesError};
 pub use types::{
-    Color, Mode, Move, Piece, Rotation, SearchResult, Snapshot, Square, Team, Variant, WinnerKind,
-    BOARD_SIZE, SQUARE_COUNT,
+    Color, Mode, Move, Piece, Rotation, SearchFallback, SearchResult, Snapshot, Square, Team,
+    Variant, WinnerKind, BOARD_SIZE, SQUARE_COUNT,
 };
 
 pub fn version() -> &'static str {

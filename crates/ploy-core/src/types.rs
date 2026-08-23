@@ -181,6 +181,17 @@ pub struct SearchResult {
     pub depth: u32,
     pub nodes: u64,
     pub score: i32,
+    pub best_score: i32,
+    pub score_loss: i32,
+    pub principal_variation: Vec<Move>,
+    pub fallback: SearchFallback,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SearchFallback {
+    None,
+    Static,
 }
 
 impl Snapshot {

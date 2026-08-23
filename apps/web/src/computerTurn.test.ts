@@ -37,6 +37,10 @@ test("timeout retries once with a smaller deterministic budget", async () => {
     depth: 1,
     nodes: 250,
     score: 0,
+    bestScore: 0,
+    scoreLoss: 0,
+    principalVariation: [{ type: "rotate", at: 0, steps: 1 }],
+    fallback: "none",
   };
   const calls: number[] = [];
   const bot: PloyBot = {

@@ -11,7 +11,9 @@ use crate::movegen::{
     compact_board, effective_flags, generate_moves, CompactBoard, CompactKind, CompactPiece,
 };
 use crate::moves::controller_for_turn;
-use crate::types::{Color, Mode, Move, SearchResult, Snapshot, Variant, WinnerKind};
+use crate::types::{
+    Color, Mode, Move, SearchFallback, SearchResult, Snapshot, Variant, WinnerKind,
+};
 use crate::validate::validate_snapshot;
 
 const MATE: i32 = 100_000;
@@ -98,7 +100,7 @@ pub fn choose_move(
 
     let mut position = Position::from_snapshot(snapshot);
     let root_moves = position.moves();
-    let Some(fallback) = root_moves.first().cloned() else {
+    let Some(_) = root_moves.first() else {
         return Err(RulesError::new("noLegalMove", "no legal move for search"));
     };
     let node_limit = max_nodes.max(1);
@@ -114,14 +116,25 @@ pub fn choose_move(
         ));
     }
 
+    let mut root_scores = static_root_scores(&mut position, root_moves);
+    root_scores.sort_by(|(left_move, left_score), (right_move, right_score)| {
+        right_score.cmp(left_score).then_with(|| {
+            stable_move_noise(left_move, random_seed)
+                .cmp(&stable_move_noise(right_move, random_seed))
+        })
+    });
+    let (fallback, fallback_score) = root_scores[0].clone();
     let mut searcher = Searcher::new(node_limit, random_seed);
     let mut best = SearchResult {
-        mv: fallback,
+        mv: fallback.clone(),
         depth: 0,
         nodes: 0,
-        score: evaluate(&position),
+        score: fallback_score,
+        best_score: fallback_score,
+        score_loss: 0,
+        principal_variation: vec![fallback],
+        fallback: SearchFallback::Static,
     };
-    let mut root_scores: Vec<(Move, i32)> = root_moves.into_iter().map(|mv| (mv, 0)).collect();
 
     for depth in 1..=max_depth.clamp(1, MAX_SEARCH_DEPTH) {
         searcher.generation = searcher.generation.wrapping_add(1);
@@ -162,12 +175,28 @@ pub fn choose_move(
         let selected = near_equal[searcher.next_random() as usize % near_equal.len()];
         best.mv = selected.0.clone();
         best.score = selected.1;
+        best.best_score = best_score;
+        best.score_loss = best_score - selected.1;
         best.depth = depth;
+        best.fallback = SearchFallback::None;
         root_scores = iteration;
     }
 
     best.nodes = searcher.nodes;
+    best.principal_variation = searcher.principal_variation(&position, &best.mv, best.depth);
     Ok(best)
+}
+
+fn static_root_scores(position: &mut Position, moves: Vec<Move>) -> Vec<(Move, i32)> {
+    moves
+        .into_iter()
+        .map(|mv| {
+            let undo = position.make_move(&mv);
+            let score = -evaluate(position);
+            position.unmake_move(undo);
+            (mv, score)
+        })
+        .collect()
 }
 
 fn cadet_move(position: &mut Position, moves: &[Move], seed: u32, max_nodes: u64) -> SearchResult {
@@ -184,10 +213,14 @@ fn cadet_move(position: &mut Position, moves: &[Move], seed: u32, max_nodes: u64
     let score = -evaluate(position);
     position.unmake_move(undo);
     SearchResult {
-        mv,
+        mv: mv.clone(),
         depth: 0,
         nodes: max_nodes.min(1),
         score,
+        best_score: score,
+        score_loss: 0,
+        principal_variation: vec![mv],
+        fallback: SearchFallback::Static,
     }
 }
 
@@ -502,6 +535,54 @@ impl Searcher {
             .wrapping_add(1_013_904_223);
         self.seed
     }
+
+    fn principal_variation(
+        &self,
+        root: &Position,
+        root_move: &Move,
+        completed_depth: u32,
+    ) -> Vec<Move> {
+        let mut variation = vec![root_move.clone()];
+        if completed_depth <= 1 {
+            return variation;
+        }
+
+        let mut position = root.clone();
+        if !position.moves().contains(root_move) {
+            return variation;
+        }
+        position.make_move(root_move);
+        let mut remaining = completed_depth - 1;
+        let mut extensions_left = EXTENSIONS_PER_LINE;
+
+        while remaining > 0 && position.winner.is_none() {
+            let tt_hash = position.hash ^ zobrist_extension_budget(extensions_left);
+            let Some(mv) = self
+                .tt_entry(tt_hash)
+                .and_then(|entry| entry.best_move.clone())
+            else {
+                break;
+            };
+            if !position.moves().contains(&mv) {
+                break;
+            }
+
+            let quiet = !position.is_capture(&mv);
+            let recapture = matches!(
+                mv,
+                Move::Motion { to, .. }
+                    if !quiet && position.last_move_to == Some(to)
+            );
+            position.make_move(&mv);
+            let commander_attack = commander_threatened(&position, position.side);
+            let extend = extensions_left > 0 && (recapture || commander_attack);
+            remaining = remaining - 1 + u32::from(extend);
+            extensions_left = extensions_left.saturating_sub(u8::from(extend));
+            variation.push(mv);
+        }
+
+        variation
+    }
 }
 
 impl Position {
@@ -567,7 +648,7 @@ impl Position {
             Move::Rotate { at, steps } => {
                 let moving = self.board[at as usize].expect("generated rotation has a piece");
                 self.set_square(at, Some(moving.rotated(steps)));
-                self.set_last_move_to(Some(at));
+                self.set_last_move_to(None);
                 self.flip_side();
                 self.winner = self.derived_winner();
                 Undo {
@@ -831,6 +912,19 @@ mod tests {
             position.moves(),
             crate::moves::legal_moves_generated(&snapshot, Color::Green)
         );
+    }
+
+    #[test]
+    fn rotation_does_not_create_a_motion_destination() {
+        let snapshot = initial_snapshot(Mode::TwoPlayer);
+        let mut position = Position::from_snapshot(&snapshot);
+        let rotation = position
+            .moves()
+            .into_iter()
+            .find(|mv| matches!(mv, Move::Rotate { .. }))
+            .expect("opening has a direction move");
+        position.make_move(&rotation);
+        assert_eq!(position.last_move_to, None);
     }
 
     #[test]

@@ -21,6 +21,10 @@ export type SearchResult = {
   depth: number;
   nodes: number;
   score: number;
+  bestScore: number;
+  scoreLoss: number;
+  principalVariation: Move[];
+  fallback: "none" | "static";
 };
 
 export type RulesAdapter = {

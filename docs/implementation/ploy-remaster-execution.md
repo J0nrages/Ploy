@@ -16,10 +16,10 @@ todos:
     status: completed
   - id: opponent-foundation
     content: Guarantee a scored fallback, retain safe interrupted-search results, and expose auditable search diagnostics.
-    status: in_progress
+    status: completed
   - id: opponent-profiles
     content: Separate opponent strength from bounded playing style and support revisioned mid-game changes locally and online.
-    status: pending
+    status: in_progress
   - id: adaptive-strength
     content: Add optional deterministic adaptive strength from balanced referee analysis of qualifying human moves.
     status: pending

@@ -1,6 +1,6 @@
 use ploy_core::board::square_of;
 use ploy_core::terminal::{derived_inactive, evaluate_winner};
-use ploy_core::types::{Color, Mode, Move, Piece, Rotation, Snapshot, Variant};
+use ploy_core::types::{Color, Mode, Move, Piece, Rotation, SearchFallback, Snapshot, Variant};
 use ploy_core::{apply_move, choose_move, create_game, is_legal};
 
 fn seal(mut snapshot: Snapshot) -> Snapshot {
@@ -58,6 +58,16 @@ fn choose_move_is_deterministic_for_a_seed() {
     let b = choose_move(&start, Color::Green, 2, 1_500, 99).unwrap();
     assert_eq!(a.mv, b.mv);
     assert_eq!(a.score, b.score);
+}
+
+#[test]
+fn interrupted_deeper_iteration_keeps_the_completed_result() {
+    let start = create_game(Mode::TwoPlayer);
+    let result = choose_move(&start, Color::Green, 3, 500, 2).unwrap();
+    assert_eq!(result.depth, 1);
+    assert_eq!(result.fallback, SearchFallback::None);
+    assert_eq!(result.nodes, 500);
+    assert_eq!(result.principal_variation.first(), Some(&result.mv));
 }
 
 #[test]
@@ -194,6 +204,49 @@ fn captures_commander_in_one() {
     );
     let snapshot = seal(snapshot);
     let result = choose_move(&snapshot, Color::Green, 2, 4_000, 1).unwrap();
+    assert_eq!(
+        result.mv,
+        Move::Motion {
+            from: square_of(4, 4).unwrap(),
+            to: square_of(5, 4).unwrap(),
+            post_move_steps: None,
+        }
+    );
+}
+
+#[test]
+fn exhausted_first_iteration_keeps_a_scored_winning_fallback() {
+    let mut snapshot = Snapshot::empty(Mode::TwoPlayer);
+    place(
+        &mut snapshot,
+        4,
+        4,
+        commander("green:commander", Color::Green, 0),
+    );
+    place(
+        &mut snapshot,
+        0,
+        0,
+        shield("green:shield1", Color::Green, 0),
+    );
+    place(
+        &mut snapshot,
+        5,
+        4,
+        commander("coral:commander", Color::Coral, 0),
+    );
+    place(
+        &mut snapshot,
+        8,
+        0,
+        shield("coral:shield1", Color::Coral, 0),
+    );
+    let snapshot = seal(snapshot);
+    let result = choose_move(&snapshot, Color::Green, 2, 1, 1).unwrap();
+    assert_eq!(result.depth, 0);
+    assert_eq!(result.fallback, SearchFallback::Static);
+    assert_eq!(result.score_loss, 0);
+    assert_eq!(result.principal_variation, vec![result.mv.clone()]);
     assert_eq!(
         result.mv,
         Move::Motion {
