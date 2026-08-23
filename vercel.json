@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "bunVersion": "1.x",
+  "installCommand": "bun install --frozen-lockfile",
+  "buildCommand": "bun run wasm-gate && PLOY_PUBLIC_BASE=/ploy/ bun run --filter web build",
+  "outputDirectory": "apps/web/dist",
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/ploy",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/ploy",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/ploy/:path*",
+      "destination": "/:path*"
+    }
+  ]
+}
