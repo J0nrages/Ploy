@@ -14,6 +14,8 @@ export type SearchRequest = {
   maxDepth?: number;
   maxNodes: number;
   randomSeed: number;
+  style?: "balanced" | "aggressor" | "guardian" | "maneuverer" | "trickster";
+  maxScoreLoss?: number;
 };
 
 export type SearchResult = {

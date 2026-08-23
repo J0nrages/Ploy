@@ -26,6 +26,16 @@ pub enum Mode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub enum OpponentStyle {
+    Balanced,
+    Aggressor,
+    Guardian,
+    Maneuverer,
+    Trickster,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Team {
     #[serde(rename = "green-yellow")]
     GreenYellow,

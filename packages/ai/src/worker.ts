@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { wrapInstance, type SearchResult } from "@ploy/rules";
 import type { Color, Snapshot } from "@ploy/rules";
+import type { OpponentStyle } from "./index";
 
 const wasmUrl = new URL("../../rules/wasm/ploy_core.wasm", import.meta.url);
 
@@ -12,6 +13,8 @@ type ChooseRequest = {
   maxDepth?: number;
   maxNodes: number;
   randomSeed: number;
+  style?: OpponentStyle;
+  maxScoreLoss?: number;
 };
 
 const ready = (async () => {
@@ -41,6 +44,8 @@ onmessage = async (event: MessageEvent<ChooseRequest>) => {
       maxDepth: event.data.maxDepth,
       maxNodes: event.data.maxNodes,
       randomSeed: event.data.randomSeed,
+      style: event.data.style,
+      maxScoreLoss: event.data.maxScoreLoss,
     });
     postMessage({ type: "result", requestId: event.data.requestId, result });
   } catch (error) {

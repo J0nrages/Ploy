@@ -1,12 +1,41 @@
 import type { Color, Move, Snapshot } from "@ploy/rules";
 
-export type Difficulty = "cadet" | "navigator" | "commander" | "strategist";
+export type Strength = "cadet" | "navigator" | "commander" | "strategist";
+export type Difficulty = Strength;
+export type OpponentStyle =
+  | "balanced"
+  | "aggressor"
+  | "guardian"
+  | "maneuverer"
+  | "trickster";
+
+export type OpponentProfile = {
+  strength: Strength;
+  style: OpponentStyle;
+};
+
+export const STRENGTHS: readonly Strength[] = [
+  "cadet",
+  "navigator",
+  "commander",
+  "strategist",
+];
+
+export const OPPONENT_STYLES: readonly OpponentStyle[] = [
+  "balanced",
+  "aggressor",
+  "guardian",
+  "maneuverer",
+  "trickster",
+];
 
 export type SearchOptions = {
   maxTimeMs: number;
   maxDepth?: number;
   maxNodes: number;
   randomSeed: number;
+  style?: OpponentStyle;
+  maxScoreLoss?: number;
 };
 
 export type SearchResult = {
@@ -47,12 +76,66 @@ export interface PloyBot {
   terminate(): void;
 }
 
-export const DIFFICULTY_BUDGETS: Record<Difficulty, SearchOptions> = {
-  cadet: { maxTimeMs: 200, maxDepth: 1, maxNodes: 250, randomSeed: 1 },
-  navigator: { maxTimeMs: 500, maxDepth: 3, maxNodes: 30_000, randomSeed: 2 },
-  commander: { maxTimeMs: 2_000, maxDepth: 5, maxNodes: 100_000, randomSeed: 3 },
-  strategist: { maxTimeMs: 5_000, maxDepth: 6, maxNodes: 300_000, randomSeed: 4 },
+export const STRENGTH_BUDGETS: Record<Strength, SearchOptions> = {
+  cadet: {
+    maxTimeMs: 200,
+    maxDepth: 1,
+    maxNodes: 250,
+    randomSeed: 1,
+    style: "balanced",
+    maxScoreLoss: 160,
+  },
+  navigator: {
+    maxTimeMs: 500,
+    maxDepth: 3,
+    maxNodes: 30_000,
+    randomSeed: 2,
+    style: "balanced",
+    maxScoreLoss: 40,
+  },
+  commander: {
+    maxTimeMs: 2_000,
+    maxDepth: 5,
+    maxNodes: 100_000,
+    randomSeed: 3,
+    style: "balanced",
+    maxScoreLoss: 12,
+  },
+  strategist: {
+    maxTimeMs: 5_000,
+    maxDepth: 6,
+    maxNodes: 300_000,
+    randomSeed: 4,
+    style: "balanced",
+    maxScoreLoss: 0,
+  },
 };
+
+export const DIFFICULTY_BUDGETS = STRENGTH_BUDGETS;
+
+export function searchOptionsForProfile(
+  profile: OpponentProfile,
+  gameSeed: number,
+  ply: number,
+  profileRevision = 0,
+): SearchOptions {
+  const budget = STRENGTH_BUDGETS[profile.strength];
+  return {
+    ...budget,
+    randomSeed: deriveTurnSeed(gameSeed, ply, profileRevision),
+    style: profile.style,
+  };
+}
+
+function deriveTurnSeed(gameSeed: number, ply: number, profileRevision: number): number {
+  let value = gameSeed >>> 0;
+  value ^= Math.imul((ply + 1) >>> 0, 0x9e3779b1);
+  value ^= Math.imul((profileRevision + 1) >>> 0, 0x85ebca6b);
+  value ^= value >>> 16;
+  value = Math.imul(value, 0x7feb352d);
+  value ^= value >>> 15;
+  return value >>> 0;
+}
 
 type WorkerResponse =
   | { type: "ready" }
@@ -187,6 +270,8 @@ function requestMove(
       maxDepth: options.maxDepth,
       maxNodes: options.maxNodes,
       randomSeed: options.randomSeed,
+      style: options.style,
+      maxScoreLoss: options.maxScoreLoss,
     });
   });
 }

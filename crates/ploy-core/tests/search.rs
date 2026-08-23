@@ -1,7 +1,7 @@
 use ploy_core::board::square_of;
 use ploy_core::terminal::{derived_inactive, evaluate_winner};
 use ploy_core::types::{Color, Mode, Move, Piece, Rotation, SearchFallback, Snapshot, Variant};
-use ploy_core::{apply_move, choose_move, create_game, is_legal};
+use ploy_core::{apply_move, choose_move, choose_move_with_profile, create_game, is_legal};
 
 fn seal(mut snapshot: Snapshot) -> Snapshot {
     snapshot.inactive_seats = derived_inactive(&snapshot);
@@ -71,11 +71,21 @@ fn interrupted_deeper_iteration_keeps_the_completed_result() {
 }
 
 #[test]
-fn cadet_can_choose_a_direction_move() {
+fn cadet_chooses_a_scored_candidate_within_its_error_limit() {
     let start = create_game(Mode::TwoPlayer);
-    let result = choose_move(&start, Color::Green, 1, 250, 1).unwrap();
-    assert!(matches!(result.mv, Move::Rotate { .. }));
+    let result = choose_move_with_profile(
+        &start,
+        Color::Green,
+        1,
+        250,
+        1,
+        ploy_core::OpponentStyle::Balanced,
+        160,
+    )
+    .unwrap();
     assert!(is_legal(&start, &result.mv, Color::Green).unwrap());
+    assert!(result.score_loss <= 160);
+    assert_eq!(result.best_score - result.score, result.score_loss);
 }
 
 #[test]
@@ -212,6 +222,17 @@ fn captures_commander_in_one() {
             post_move_steps: None,
         }
     );
+    for style in [
+        ploy_core::OpponentStyle::Balanced,
+        ploy_core::OpponentStyle::Aggressor,
+        ploy_core::OpponentStyle::Guardian,
+        ploy_core::OpponentStyle::Maneuverer,
+        ploy_core::OpponentStyle::Trickster,
+    ] {
+        let styled =
+            choose_move_with_profile(&snapshot, Color::Green, 1, 250, 9, style, 160).unwrap();
+        assert_eq!(styled.mv, result.mv, "{style:?} ignored the forced win");
+    }
 }
 
 #[test]
