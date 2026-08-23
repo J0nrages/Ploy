@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { SPIKE_MOVE, wrapInstance } from "../packages/rules/src/index.ts";
 
@@ -58,7 +58,5 @@ The browser Worker applies the Green e3-e4 shield motion and must return this ex
 ${fixtureJson}
 \`\`\`
 `;
-writeFileSync("docs/wasm-spike.md", notes);
-
 console.log(notes);
 console.log("wasm-gate local checks passed");
