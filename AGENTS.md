@@ -26,7 +26,7 @@ An individual work order is complete only when its stated gate passes. The remas
 
 ## Cursor Cloud specific instructions
 
-This checkout is the single Ploy remaster repo (`github.com/j0nrages/ploy`). There is no sibling repo to clone. Stay on `main` unless the user names another branch. `origin/3d-and-ui` is a remaster UI branch ahead of `main`. `origin/legacy/pre-remaster` is frozen pre-remaster Python and is not the current product. Ignore `archive/` for remaster work.
+This checkout is the single Ploy remaster repo (`github.com/j0nrages/ploy`). There is no sibling repo to clone. New agents can check out any remaster branch (`main`, `3d-and-ui`, and later remaster feature branches): they share the same Bun lockfile, Cargo workspace, and `rust-toolchain.toml`. `origin/legacy/pre-remaster` is frozen pre-remaster Python at the repo root — a different product, not this toolchain. Ignore `archive/` for remaster work. Stay on the branch the user names; default is `main`.
 
 Standard install, lint, test, and dev commands live in `README.md`. WASM artifacts are committed; rebuild with `bun run build:wasm` only when changing `crates/ploy-core` or `crates/ploy-wasm`.
 
