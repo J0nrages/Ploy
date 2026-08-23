@@ -41,7 +41,7 @@ import {
   type LocalGameSave,
   type LocalPlayKind,
 } from "./localGame";
-import { buildMoveTimeline } from "./moveTimeline";
+import { buildMoveTimeline, type TimelineEntry } from "./moveTimeline";
 import { PlayHud } from "./PlayHud";
 import { RulesHelp } from "./RulesHelp";
 import { snapshotTurnKey, type ComputerMoveOperation } from "./computerTurn";
@@ -82,6 +82,7 @@ export function LocalPlay(props: { onBack: () => void }) {
     latestGame?.adaptiveSamples ?? [],
   );
   const [pendingReviews, setPendingReviews] = useState<PendingHumanReview[]>([]);
+  const [profileEvents, setProfileEvents] = useState<TimelineEntry[]>([]);
   const [gameSeed, setGameSeed] = useState(latestGame?.settings.gameSeed ?? createGameSeed);
   const [profileRevision, setProfileRevision] = useState(
     latestGame?.settings.profileRevision ?? 0,
@@ -199,9 +200,15 @@ export function LocalPlay(props: { onBack: () => void }) {
     onError: setError,
   });
 
+  const pendingReview = pendingReviews[0] ?? null;
   const referee = useAdaptiveReferee({
-    pending: pendingReviews[0] ?? null,
-    enabled: view === "play" && playKind === "computer" && adaptive.enabled,
+    pending: pendingReview,
+    enabled:
+      view === "play" &&
+      playKind === "computer" &&
+      adaptive.enabled &&
+      pendingReview !== null &&
+      snapshot.ply >= pendingReview.snapshot.ply + 2,
     gameSeed,
     onSettled: (pending, review) => {
       setPendingReviews((reviews) => reviews.filter((item) => item.key !== pending.key));
@@ -230,7 +237,31 @@ export function LocalPlay(props: { onBack: () => void }) {
     }
     setStrength(adaptiveState.strength);
     setProfileRevision((revision) => revision + 1);
-  }, [adaptive.enabled, adaptiveState.strength, strength, view]);
+    setProfileEvents((events) => [
+      ...events,
+      {
+        id: `profile-${snapshot.ply}-${events.length + 1}`,
+        ply: snapshot.ply,
+        color: null,
+        kind: "opponent",
+        summary: `Adaptive strength changed to ${strengthName(adaptiveState.strength)}`,
+      },
+    ]);
+  }, [adaptive.enabled, adaptiveState.strength, snapshot.ply, strength, view]);
+
+  const recordProfileChange = (summary: string): void => {
+    setProfileRevision((revision) => revision + 1);
+    setProfileEvents((events) => [
+      ...events,
+      {
+        id: `profile-${snapshot.ply}-${events.length + 1}`,
+        ply: snapshot.ply,
+        color: null,
+        kind: "opponent",
+        summary,
+      },
+    ]);
+  };
 
   const updateStrength = (next: Strength): void => {
     if (next === strength) {
@@ -241,7 +272,7 @@ export function LocalPlay(props: { onBack: () => void }) {
     setAdaptiveSamples([]);
     setPendingReviews([]);
     if (view === "play") {
-      setProfileRevision((revision) => revision + 1);
+      recordProfileChange(`Opponent strength changed to ${strengthName(next)}`);
     }
   };
 
@@ -268,7 +299,9 @@ export function LocalPlay(props: { onBack: () => void }) {
     if (nextStrength !== strength) {
       setStrength(nextStrength);
       if (view === "play") {
-        setProfileRevision((revision) => revision + 1);
+        recordProfileChange(
+          `Adaptive bounds changed; strength is now ${strengthName(nextStrength)}`,
+        );
       }
     }
   };
@@ -279,7 +312,7 @@ export function LocalPlay(props: { onBack: () => void }) {
     }
     setStyle(next);
     if (view === "play") {
-      setProfileRevision((revision) => revision + 1);
+      recordProfileChange(`Opponent style changed to ${styleName(next)}`);
     }
   };
 
@@ -292,7 +325,15 @@ export function LocalPlay(props: { onBack: () => void }) {
   });
 
   const legalCount = interaction.legal.length;
-  const timeline = useMemo(() => buildMoveTimeline(history, snapshot), [history, snapshot]);
+  const timeline = useMemo(
+    () =>
+      [...buildMoveTimeline(history, snapshot), ...profileEvents].sort(
+        (left, right) =>
+          left.ply - right.ply ||
+          (left.kind === right.kind ? left.id.localeCompare(right.id) : left.kind === "move" ? -1 : 1),
+      ),
+    [history, profileEvents, snapshot],
+  );
   const toggleControlsPlacement = (): void => {
     const placement = controlsPlacement === "bottom" ? "top" : "bottom";
     setControlsPlacement(placement);
@@ -309,6 +350,7 @@ export function LocalPlay(props: { onBack: () => void }) {
     setAdaptive((settings) => ({ ...settings, baseStrength: strength }));
     setAdaptiveSamples([]);
     setPendingReviews([]);
+    setProfileEvents([]);
     setPlayKind(nextPlayKind);
     setSnapshot(createGame(mode));
     setHistory([]);
@@ -332,6 +374,19 @@ export function LocalPlay(props: { onBack: () => void }) {
     setAdaptive(game.settings.adaptive);
     setAdaptiveSamples(game.adaptiveSamples);
     setPendingReviews([]);
+    setProfileEvents(
+      game.settings.profileRevision > 0
+        ? [
+            {
+              id: `profile-restored-${game.id}`,
+              ply: game.snapshot.ply,
+              color: null,
+              kind: "opponent",
+              summary: `Opponent profile restored: ${strengthName(game.settings.strength)} · ${styleName(game.settings.style)}`,
+            },
+          ]
+        : [],
+    );
     setSnapshot(game.snapshot);
     setHistory(game.history);
     setError(null);
@@ -670,23 +725,51 @@ export function LocalPlay(props: { onBack: () => void }) {
               <details className="ai-diagnostics">
                 <summary>Developer search diagnostics</summary>
                 <dl>
+                  <div><dt>Strength</dt><dd>{strengthName(strength)}</dd></div>
+                  <div><dt>Style</dt><dd>{styleName(style)}</dd></div>
+                  <div><dt>Game seed</dt><dd>{gameSeed}</dd></div>
+                  <div><dt>Profile revision</dt><dd>{profileRevision}</dd></div>
                   <div><dt>Depth</dt><dd>{computer.lastResult.depth}</dd></div>
                   <div><dt>Nodes</dt><dd>{computer.lastResult.nodes.toLocaleString()}</dd></div>
+                  <div><dt>Elapsed</dt><dd>{computer.lastResult.elapsedMs.toFixed(0)} ms</dd></div>
                   <div><dt>Best score</dt><dd>{computer.lastResult.bestScore}</dd></div>
                   <div><dt>Selected score</dt><dd>{computer.lastResult.score}</dd></div>
                   <div><dt>Score loss</dt><dd>{computer.lastResult.scoreLoss}</dd></div>
                   <div><dt>Fallback</dt><dd>{computer.lastResult.fallback}</dd></div>
                   <div>
                     <dt>Variation</dt>
-                    <dd>{computer.lastResult.principalVariation.length} plies</dd>
+                    <dd>
+                      {computer.lastResult.principalVariation.map(moveDiagnostic).join(" → ")}
+                    </dd>
                   </div>
                   {adaptive.enabled ? (
                     <>
                       <div><dt>Referee</dt><dd>{referee.thinking ? "reviewing" : "idle"}</dd></div>
                       <div><dt>Qualifying reviews</dt><dd>{adaptiveState.qualifyingMoves}</dd></div>
                       <div><dt>Adjustments</dt><dd>{adaptiveState.adjustments}</dd></div>
+                      <div><dt>Confidence</dt><dd>{adaptiveState.confidence}</dd></div>
+                      <div><dt>Evidence</dt><dd>{adaptiveState.evidenceCount}/4</dd></div>
+                      <div>
+                        <dt>Rolling loss</dt>
+                        <dd>
+                          {adaptiveState.rollingAverageLoss === null
+                            ? "—"
+                            : adaptiveState.rollingAverageLoss.toFixed(1)}
+                        </dd>
+                      </div>
+                      <div><dt>Cooldown</dt><dd>{adaptiveState.cooldownRemaining}</dd></div>
+                      <div>
+                        <dt>Adjustment reason</dt>
+                        <dd>{adaptiveState.adjustmentReason ?? "—"}</dd>
+                      </div>
                       {referee.lastReview ? (
-                        <div><dt>Last human loss</dt><dd>{referee.lastReview.scoreLoss}</dd></div>
+                        <>
+                          <div><dt>Last human loss</dt><dd>{referee.lastReview.scoreLoss}</dd></div>
+                          <div>
+                            <dt>Referee elapsed</dt>
+                            <dd>{referee.lastReview.elapsedMs.toFixed(0)} ms</dd>
+                          </div>
+                        </>
                       ) : null}
                       {referee.lastError ? (
                         <div><dt>Referee error</dt><dd>{referee.lastError}</dd></div>
@@ -894,6 +977,18 @@ function styleDescription(style: OpponentStyle): string {
     return "Prefers unusual rotations and threat creation within safe limits.";
   }
   return "Balances material, mobility, safety, and immediate threats.";
+}
+
+function moveDiagnostic(move: Move): string {
+  if (move.type === "rotate") {
+    return `${squareName(move.at)}↻${move.steps}`;
+  }
+  const rotation = move.postMoveSteps ? `↻${move.postMoveSteps}` : "";
+  return `${squareName(move.from)}–${squareName(move.to)}${rotation}`;
+}
+
+function squareName(square: number): string {
+  return `${String.fromCharCode(97 + (square % 9))}${Math.floor(square / 9) + 1}`;
 }
 
 function PanelPlacementIcon(props: { placement: ControlsPlacement }) {

@@ -2,8 +2,10 @@ import { controllerForTurn, type Color, type Piece, type Snapshot, type Square }
 import { fileRank } from "@ploy/ui-board";
 
 export type TimelineEntry = {
+  id: string;
   ply: number;
-  color: Color;
+  color: Color | null;
+  kind: "move" | "opponent";
   summary: string;
 };
 
@@ -81,8 +83,10 @@ export function describeTransition(before: Snapshot, after: Snapshot): TimelineE
   }
 
   return {
+    id: `move-${after.ply}`,
     ply: after.ply,
     color: mover.piece.color,
+    kind: "move",
     summary: parts.join(", "),
   };
 }

@@ -29,6 +29,7 @@ test("worker chooses a legal two-player move", async () => {
     new AbortController().signal,
   );
   expect(result.nodes).toBeGreaterThan(0);
+  expect(result.elapsedMs).toBeGreaterThanOrEqual(0);
   expect(isLegal(snapshot, result.move, "green")).toBe(true);
   bot.terminate();
 });
@@ -49,6 +50,7 @@ test("worker referee scores the actual human move with balanced search", async (
   expect(review.legalMoveCount).toBe(moves.length);
   expect(review.depth).toBe(1);
   expect(review.scoreLoss).toBe(review.bestScore - review.playedScore);
+  expect(review.elapsedMs).toBeGreaterThanOrEqual(0);
   expect(isLegal(snapshot, review.bestMove, "green")).toBe(true);
   bot.terminate();
 });

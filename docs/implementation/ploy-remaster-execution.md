@@ -23,6 +23,9 @@ todos:
   - id: adaptive-strength
     content: Add optional deterministic adaptive strength from balanced referee analysis of qualifying human moves.
     status: completed
+  - id: opponent-calibration
+    content: Add complete developer diagnostics, fast behavioral calibration gates, and a release-mode adjacent-strength self-play harness.
+    status: completed
   - id: clients
     content: Build the shared board UI, web app, Tauri shell, and anonymous Convex rooms.
     status: in_progress
@@ -421,11 +424,21 @@ One game owns one game seed. A retry or resumed turn with the same snapshot, pro
 
 Local saves migrate from difficulty-only settings to a versioned opponent configuration. Existing difficulty becomes strength, style defaults to Balanced, and a generated game seed is then preserved. Undo changes board history but does not undo a manual opponent-profile change. Rematch retains the current profile.
 
-Adaptive strength is explicit and bounded by player-selected minimum and maximum strengths. It never changes style. Balanced referee analysis evaluates qualifying human moves independently of the opponent profile. Forced moves, insufficiently completed analysis, and low-choice positions do not qualify. Adjustment uses a rolling window, requires at least four qualifying samples, changes at most one strength step, and then observes a four-turn cooldown. Referee failure skips a sample and never blocks play. Manual profile settings persist; adaptive samples at or after an undone ply are discarded before adaptive state is recomputed.
+Adaptive strength is explicit and bounded by player-selected minimum and maximum strengths. It never changes style. Balanced referee analysis evaluates qualifying human moves independently of the opponent profile. Moves in the opening eight plies, forced moves, insufficiently completed analysis, and positions with fewer than three legal choices do not qualify. Adjustment uses a rolling window, requires at least four qualifying samples, changes at most one strength step, and then observes a four-turn cooldown. Referee failure skips a sample and never blocks play. Manual profile settings persist; adaptive samples at or after an undone ply are discarded before adaptive state is recomputed.
 
 Required tests: scored fallback under first-iteration exhaustion; partial deeper iteration retains the last completed result; profile and game-seed determinism; style tactical guardrails; distinct style preferences on neutral fixtures; local v2 save migration; mid-search profile cancellation; stale online profile-revision rejection; host-only online change; rematch seed replacement; forced and low-confidence referee exclusions; bounded one-step adaptation; cooldown; undo/resume reproduction; Worker timeout recovery; and native/WASM parity.
 
 Gate: build the committed WASM artifact, run formatting and clippy with warnings denied, all Rust and Bun tests, lint, typecheck, web build, Worker smoke, anonymous local Convex tests, and the final acceptance commands. Automatic adaptive strength ships behind an Experimental label until calibrated self-play and human review demonstrate stable level separation.
+
+### Wave 1D — opponent diagnostics and calibration
+
+Allowed scope: opponent tests and examples inside `crates/ploy-core`, Worker timing metadata in `packages/ai`, developer-only diagnostics in `apps/web`, and calibration documentation.
+
+Developer diagnostics show profile revision, strength, style, game seed, completed depth, nodes, Worker elapsed time, full principal variation, best and selected scores, intentional score loss, fallback quality, referee loss/time, adaptive evidence, rolling loss, confidence, cooldown, and the latest adjustment reason.
+
+Fast required gates cover proportional strength effort, controlled-error ceilings, multi-seed controlled variety, tactical guardrails, and distinct style preferences on a reachable fixture. A release-mode native harness runs adjacent strengths with product budgets and swapped colors. Its results are engineering calibration only: do not publish numerical ratings until longer multi-seed terminal self-play and human review demonstrate stable separation.
+
+Gate: fast native and Worker tests pass; release calibration runs without an illegal move or search failure; measured results and their limitations are committed in `docs/implementation/ai-opponent-calibration.md`.
 
 ### Wave 2A — shared board UI
 

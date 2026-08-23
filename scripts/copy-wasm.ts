@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 const targetDir = process.env.CARGO_TARGET_DIR ?? "target";
@@ -12,6 +12,7 @@ const hash = createHash("sha256").update(bytes).digest("hex");
 for (const destination of destinations) {
   mkdirSync(dirname(destination), { recursive: true });
   copyFileSync(source, destination);
+  chmodSync(destination, 0o644);
 }
 
 console.log(`copied wasm sha256=${hash}`);

@@ -2,6 +2,7 @@ use ploy_core::board::square_of;
 use ploy_core::terminal::{derived_inactive, evaluate_winner};
 use ploy_core::types::{Color, Mode, Move, Piece, Rotation, SearchFallback, Snapshot, Variant};
 use ploy_core::{apply_move, choose_move, choose_move_with_profile, create_game, is_legal};
+use std::collections::HashSet;
 
 fn seal(mut snapshot: Snapshot) -> Snapshot {
     snapshot.inactive_seats = derived_inactive(&snapshot);
@@ -58,6 +59,121 @@ fn choose_move_is_deterministic_for_a_seed() {
     let b = choose_move(&start, Color::Green, 2, 1_500, 99).unwrap();
     assert_eq!(a.mv, b.mv);
     assert_eq!(a.score, b.score);
+}
+
+#[test]
+fn cadet_seeds_produce_controlled_opening_variety() {
+    let start = create_game(Mode::TwoPlayer);
+    let moves: HashSet<String> = (1..=12)
+        .map(|seed| {
+            let result = choose_move_with_profile(
+                &start,
+                Color::Green,
+                1,
+                250,
+                seed,
+                ploy_core::OpponentStyle::Balanced,
+                160,
+            )
+            .unwrap();
+            assert!(result.score_loss <= 160);
+            serde_json::to_string(&result.mv).unwrap()
+        })
+        .collect();
+    assert!(
+        moves.len() > 1,
+        "Cadet seeds should vary among scored moves"
+    );
+}
+
+#[test]
+fn scaled_strengths_have_monotonic_effort_and_bounded_error() {
+    let start = create_game(Mode::TwoPlayer);
+    let profiles = [(1, 250, 160), (2, 1_000, 40), (3, 3_000, 12), (4, 8_000, 0)];
+    let results: Vec<_> = profiles
+        .into_iter()
+        .map(|(depth, nodes, score_loss)| {
+            choose_move_with_profile(
+                &start,
+                Color::Green,
+                depth,
+                nodes,
+                17,
+                ploy_core::OpponentStyle::Balanced,
+                score_loss,
+            )
+            .unwrap()
+        })
+        .collect();
+
+    for pair in results.windows(2) {
+        assert!(pair[1].nodes > pair[0].nodes);
+        assert!(pair[1].depth >= pair[0].depth);
+    }
+    for (result, (_, _, maximum_loss)) in results.iter().zip(profiles) {
+        assert!(result.score_loss <= maximum_loss);
+    }
+}
+
+#[test]
+fn neutral_reachable_position_exposes_distinct_style_choices() {
+    let mut snapshot = create_game(Mode::TwoPlayer);
+    snapshot = apply_move(
+        &snapshot,
+        &Move::Motion {
+            from: 22,
+            to: 31,
+            post_move_steps: None,
+        },
+        Color::Green,
+    )
+    .unwrap();
+    snapshot = apply_move(
+        &snapshot,
+        &Move::Motion {
+            from: 69,
+            to: 51,
+            post_move_steps: None,
+        },
+        Color::Coral,
+    )
+    .unwrap();
+
+    let balanced = choose_move_with_profile(
+        &snapshot,
+        Color::Green,
+        1,
+        100_000,
+        7,
+        ploy_core::OpponentStyle::Balanced,
+        0,
+    )
+    .unwrap();
+    let maneuverer = choose_move_with_profile(
+        &snapshot,
+        Color::Green,
+        1,
+        100_000,
+        7,
+        ploy_core::OpponentStyle::Maneuverer,
+        0,
+    )
+    .unwrap();
+    let trickster = choose_move_with_profile(
+        &snapshot,
+        Color::Green,
+        1,
+        100_000,
+        7,
+        ploy_core::OpponentStyle::Trickster,
+        0,
+    )
+    .unwrap();
+
+    assert_ne!(balanced.mv, maneuverer.mv);
+    assert_eq!(maneuverer.mv, trickster.mv);
+    assert!(is_legal(&snapshot, &balanced.mv, Color::Green).unwrap());
+    assert!(is_legal(&snapshot, &maneuverer.mv, Color::Green).unwrap());
 }
 
 #[test]

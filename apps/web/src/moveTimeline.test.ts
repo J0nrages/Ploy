@@ -9,8 +9,10 @@ test("timeline describes a shield slide from consecutive snapshots", async () =>
   const entry = describeTransition(start, next);
 
   expect(entry).toEqual({
+    id: "move-1",
     ply: 1,
     color: "green",
+    kind: "move",
     summary: "Shield e3 → e4",
   });
   expect(buildMoveTimeline([start], next)[0]).toEqual(entry);

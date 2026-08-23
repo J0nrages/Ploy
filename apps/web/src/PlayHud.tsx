@@ -123,13 +123,22 @@ export function PlayHud(props: {
           ref={timelineRef}
           id="move-timeline"
           className="move-timeline"
-          aria-label="Completed moves"
+          aria-label="Game timeline"
           aria-hidden={!historyOpen}
         >
           {timeline.map((entry) => (
-            <li key={entry.ply} className={`move-event move-${entry.color}`}>
+            <li
+              key={entry.id}
+              className={
+                entry.color ? `move-event move-${entry.color}` : "move-event move-profile"
+              }
+            >
               <span className="move-ply">{entry.ply}</span>
-              <span className={`color-dot ${entry.color}`} aria-hidden="true" />
+              {entry.color ? (
+                <span className={`color-dot ${entry.color}`} aria-hidden="true" />
+              ) : (
+                <span className="profile-dot" aria-hidden="true">AI</span>
+              )}
               <span className="move-copy">{entry.summary}</span>
             </li>
           ))}

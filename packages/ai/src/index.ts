@@ -1,6 +1,9 @@
-import type { Color, Move, MoveReview, Snapshot } from "@ploy/rules";
-
-export type { MoveReview } from "@ploy/rules";
+import type {
+  Color,
+  Move,
+  MoveReview as CoreMoveReview,
+  Snapshot,
+} from "@ploy/rules";
 
 export type Strength = "cadet" | "navigator" | "commander" | "strategist";
 export type Difficulty = Strength;
@@ -56,6 +59,11 @@ export type SearchResult = {
   scoreLoss: number;
   principalVariation: Move[];
   fallback: "none" | "static";
+  elapsedMs: number;
+};
+
+export type MoveReview = CoreMoveReview & {
+  elapsedMs: number;
 };
 
 export type AiErrorCode =

@@ -41,6 +41,7 @@ test("timeout retries once with a smaller deterministic budget", async () => {
     scoreLoss: 0,
     principalVariation: [{ type: "rotate", at: 0, steps: 1 }],
     fallback: "none",
+    elapsedMs: 12,
   };
   const calls: number[] = [];
   const bot: PloyBot = {
@@ -50,6 +51,9 @@ test("timeout retries once with a smaller deterministic budget", async () => {
         throw new AiError("timeout");
       }
       return result;
+    },
+    async reviewMove() {
+      throw new Error("not used by computer-turn tests");
     },
     terminate() {},
   };

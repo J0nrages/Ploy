@@ -166,6 +166,24 @@ input:focus-visible {
   box-shadow: 0 0 0.55rem currentColor;
 }
 
+.profile-dot {
+  align-items: center;
+  border: 1px solid rgba(244, 211, 94, 0.7);
+  border-radius: 999px;
+  color: #f4d35e;
+  display: inline-flex;
+  font-size: 0.52rem;
+  font-weight: 800;
+  height: 1.1rem;
+  justify-content: center;
+  letter-spacing: 0.04em;
+  width: 1.1rem;
+}
+
+.move-profile .move-copy {
+  color: #f4d35e;
+}
+
 .hud.menu {
   --menu-content-width: 48rem;
   display: grid;
@@ -649,6 +667,11 @@ fieldset legend {
 .ai-diagnostics dd {
   font-size: 0.72rem;
   margin: 0;
+}
+
+.ai-diagnostics dd {
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .online-computer-settings {

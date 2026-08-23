@@ -1151,7 +1151,7 @@ mod tests {
     #[test]
     fn styles_add_only_bounded_move_preferences() {
         let snapshot = initial_snapshot(Mode::TwoPlayer);
-        let position = Position::from_snapshot(&snapshot);
+        let mut position = Position::from_snapshot(&snapshot);
         let rotation = position
             .moves()
             .into_iter()
@@ -1168,6 +1168,30 @@ mod tests {
         assert_eq!(
             style_move_bonus(OpponentStyle::Maneuverer, &position, &rotation),
             4
+        );
+        let commander_rotation = position
+            .moves()
+            .into_iter()
+            .find(|mv| matches!(mv, Move::Rotate { at: 4, .. }))
+            .expect("opening Commander can rotate");
+        assert_eq!(
+            style_move_bonus(OpponentStyle::Guardian, &position, &commander_rotation),
+            10
+        );
+        position.board[31] = Some(CompactPiece {
+            color: Color::Coral,
+            controller: Color::Coral,
+            kind: CompactKind::Shield,
+            rot: 4,
+        });
+        let capture = Move::Motion {
+            from: 22,
+            to: 31,
+            post_move_steps: None,
+        };
+        assert_eq!(
+            style_move_bonus(OpponentStyle::Aggressor, &position, &capture),
+            12
         );
     }
 

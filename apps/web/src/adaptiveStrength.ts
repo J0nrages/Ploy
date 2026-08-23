@@ -20,10 +20,17 @@ export type AdaptiveStrengthState = {
   qualifyingMoves: number;
   adjustments: number;
   lastAdjustment: "up" | "down" | null;
+  adjustmentReason: "consistent-play" | "repeated-mistakes" | null;
+  evidenceCount: number;
+  rollingAverageLoss: number | null;
+  cooldownRemaining: number;
+  confidence: "disabled" | "insufficient" | "building" | "ready" | "cooldown";
 };
 
+export const ADAPTIVE_OPENING_PLIES = 8;
+export const ADAPTIVE_MIN_LEGAL_MOVES = 3;
 export const ADAPTIVE_EVIDENCE_WINDOW = 4;
-export const ADAPTIVE_COOLDOWN_MOVES = 3;
+export const ADAPTIVE_COOLDOWN_MOVES = 4;
 
 export function createAdaptiveStrengthSettings(
   baseStrength: Strength,
@@ -52,7 +59,8 @@ export function clampStrength(
 
 export function isQualifyingAdaptiveSample(sample: AdaptiveSample): boolean {
   return (
-    sample.legalMoveCount > 1 &&
+    sample.ply >= ADAPTIVE_OPENING_PLIES &&
+    sample.legalMoveCount >= ADAPTIVE_MIN_LEGAL_MOVES &&
     sample.depth >= 1 &&
     sample.fallback === "none" &&
     Number.isFinite(sample.scoreLoss) &&
@@ -98,11 +106,17 @@ export function deriveAdaptiveStrength(
       qualifyingMoves: 0,
       adjustments: 0,
       lastAdjustment: null,
+      adjustmentReason: null,
+      evidenceCount: 0,
+      rollingAverageLoss: null,
+      cooldownRemaining: 0,
+      confidence: "disabled",
     };
   }
   let cooldown = 0;
   let adjustments = 0;
   let lastAdjustment: "up" | "down" | null = null;
+  let adjustmentReason: "consistent-play" | "repeated-mistakes" | null = null;
   let evidence: AdaptiveSample[] = [];
   const qualifying = samples.filter(isQualifyingAdaptiveSample);
 
@@ -127,10 +141,12 @@ export function deriveAdaptiveStrength(
       current += 1;
       adjustments += 1;
       lastAdjustment = "up";
+      adjustmentReason = "consistent-play";
     } else if (shouldDecrease && current > minimumIndex) {
       current -= 1;
       adjustments += 1;
       lastAdjustment = "down";
+      adjustmentReason = "repeated-mistakes";
     } else {
       continue;
     }
@@ -139,10 +155,26 @@ export function deriveAdaptiveStrength(
     cooldown = ADAPTIVE_COOLDOWN_MOVES;
   }
 
+  const rollingAverageLoss = evidence.length
+    ? evidence.reduce((total, item) => total + item.scoreLoss, 0) / evidence.length
+    : null;
+  const confidence = cooldown > 0
+    ? "cooldown"
+    : evidence.length >= ADAPTIVE_EVIDENCE_WINDOW
+      ? "ready"
+      : evidence.length > 0
+        ? "building"
+        : "insufficient";
+
   return {
     strength: STRENGTHS[current] ?? settings.baseStrength,
     qualifyingMoves: qualifying.length,
     adjustments,
     lastAdjustment,
+    adjustmentReason,
+    evidenceCount: evidence.length,
+    rollingAverageLoss,
+    cooldownRemaining: cooldown,
+    confidence,
   };
 }

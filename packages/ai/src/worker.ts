@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
-import { wrapInstance, type MoveReview, type SearchResult } from "@ploy/rules";
+import { wrapInstance } from "@ploy/rules";
 import type { Color, Move, Snapshot } from "@ploy/rules";
-import type { OpponentStyle } from "./index";
+import type { MoveReview, OpponentStyle, SearchResult } from "./index";
 
 const wasmUrl = new URL("../../rules/wasm/ploy_core.wasm", import.meta.url);
 
@@ -47,7 +47,8 @@ onmessage = async (event: MessageEvent<ChooseRequest | ReviewRequest>) => {
   try {
     const api = await ready;
     if (event.data.type === "review") {
-      const result: MoveReview = api.reviewMove({
+      const started = performance.now();
+      const coreResult = api.reviewMove({
         snapshot: event.data.snapshot,
         color: event.data.color,
         playedMove: event.data.playedMove,
@@ -55,9 +56,14 @@ onmessage = async (event: MessageEvent<ChooseRequest | ReviewRequest>) => {
         maxNodes: event.data.maxNodes,
         randomSeed: event.data.randomSeed,
       });
+      const result: MoveReview = {
+        ...coreResult,
+        elapsedMs: performance.now() - started,
+      };
       postMessage({ type: "reviewResult", requestId: event.data.requestId, result });
     } else {
-      const result: SearchResult = api.chooseMove({
+      const started = performance.now();
+      const coreResult = api.chooseMove({
         snapshot: event.data.snapshot,
         color: event.data.color,
         maxDepth: event.data.maxDepth,
@@ -66,6 +72,10 @@ onmessage = async (event: MessageEvent<ChooseRequest | ReviewRequest>) => {
         style: event.data.style,
         maxScoreLoss: event.data.maxScoreLoss,
       });
+      const result: SearchResult = {
+        ...coreResult,
+        elapsedMs: performance.now() - started,
+      };
       postMessage({ type: "result", requestId: event.data.requestId, result });
     }
   } catch (error) {
