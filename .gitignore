@@ -35,3 +35,4 @@ Thumbs.db
 # Do not ignore bun.lock or committed WASM copies:
 # packages/rules/wasm/ploy_core.wasm
 # convex/generated/ploy_core.wasm
+.vercel
