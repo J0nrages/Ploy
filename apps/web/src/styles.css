@@ -98,6 +98,11 @@ input:focus-visible {
   overflow: auto;
 }
 
+.app > .hud.online-lobby {
+  overflow: auto;
+  pointer-events: auto;
+}
+
 .hud-chrome {
   position: relative;
   z-index: 2;

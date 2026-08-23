@@ -343,7 +343,7 @@ export function OnlinePlay(props: { onBack: () => void }) {
           />
         </PlayHud>
       ) : (
-        <aside className="hud">
+        <aside className="hud online-lobby">
           <RoomChrome
             state={state}
             joinedCode={joinedCode}

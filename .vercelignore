@@ -1,0 +1,16 @@
+.git
+.agents
+.codex
+.convex
+.cursor
+.env
+.env.*
+.vercel
+node_modules
+target
+apps/desktop/src-tauri/target
+apps/web/dist
+**/node_modules
+**/dist
+**/target
+*.tsbuildinfo
