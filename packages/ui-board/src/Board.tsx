@@ -5,16 +5,15 @@ import type { Color, Move, Piece, Snapshot, Square } from "@ploy/rules";
 import {
   ARMY,
   baseMask,
-  inFacingHoverRange,
   mixHex,
   projectedRoutes,
-  rotationStepsToward,
   toWorld,
   worldToSquare,
 } from "./catalog";
 import { Disc } from "./Disc";
 import {
   destinationHover,
+  stagedShieldRotationSteps,
   type DestinationHover,
   type ShieldStaging,
 } from "./interaction";
@@ -457,7 +456,7 @@ function PieceControls(props: {
             </p>
           ) : props.hoverKind === "illegal" ? (
             <p className="piece-control-error">
-              Red: this piece cannot move there this turn. Facing follows the cursor.
+              Red: this piece cannot move there this turn. Choose a rotation explicitly to change facing.
             </p>
           ) : props.staging ? (
             <p>Move selected. Keep the current facing or choose the resulting ray pattern.</p>
@@ -687,19 +686,12 @@ export function PloyBoard({
           selectedMoves: legal,
           hovered: hoveredSquare,
         });
-  const facingOrigin = actionSquare;
-  const facingHover =
-    facingOrigin !== null &&
-    hoveredSquare !== null &&
-    actionPiece !== null &&
-    inFacingHoverRange(facingOrigin, hoveredSquare, actionPiece);
-  const boardRotationSteps =
-    (hoverKind || facingHover) &&
-    facingOrigin !== null &&
-    hoveredSquare !== null &&
-    actionPiece
-      ? rotationStepsToward(facingOrigin, hoveredSquare, actionPiece.rot)
-      : null;
+  const boardRotationSteps = stagedShieldRotationSteps(
+    staging,
+    hoveredSquare,
+    actionPiece,
+  );
+  const facingHover = boardRotationSteps !== null;
   const facingKeep = Boolean(
     staging &&
       trayRotationSteps === null &&

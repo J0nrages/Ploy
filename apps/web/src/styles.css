@@ -802,6 +802,7 @@ fieldset legend {
 }
 
 .board-shell {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -814,6 +815,8 @@ fieldset legend {
 .board-canvas {
   flex: 1 1 auto;
   min-height: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .board-canvas > div {
@@ -822,12 +825,15 @@ fieldset legend {
 }
 
 .piece-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.65em 1em;
-  flex: 0 0 auto;
   width: 100%;
+  max-height: min(52vh, 26rem);
   color: #fff8ff;
   font-size: clamp(1rem, 0.75rem + 0.7vw, 1.35rem);
   background:
@@ -836,16 +842,52 @@ fieldset legend {
   overflow: auto;
   user-select: none;
   z-index: 2;
+  pointer-events: auto;
 }
 
 .piece-controls-top {
+  top: 0;
   border-bottom: 1px solid rgba(244, 211, 94, 0.55);
   box-shadow: 0 0.7rem 1.8rem rgba(2, 0, 8, 0.35);
+  animation: piece-controls-slide-down 240ms ease-out;
 }
 
 .piece-controls-bottom {
+  bottom: 0;
   border-top: 1px solid rgba(244, 211, 94, 0.55);
   box-shadow: 0 -0.7rem 1.8rem rgba(2, 0, 8, 0.35);
+  animation: piece-controls-slide-up 240ms ease-out;
+}
+
+@keyframes piece-controls-slide-up {
+  from {
+    opacity: 0.55;
+    transform: translateY(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes piece-controls-slide-down {
+  from {
+    opacity: 0.55;
+    transform: translateY(-100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .piece-controls-top,
+  .piece-controls-bottom {
+    animation: none;
+  }
 }
 
 .piece-controls-copy {

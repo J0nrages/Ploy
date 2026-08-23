@@ -17,6 +17,7 @@ import {
   movesFrom,
   pieceAt,
   shouldStageShield,
+  stagedShieldRotationSteps,
 } from "./interaction";
 import { createGame, initializeRules, legalMoves, type Move, type Piece } from "@ploy/rules";
 
@@ -144,6 +145,62 @@ test("shield staging is required when a post-move rotation exists", () => {
   ];
   expect(shouldStageShield(shield, motions)).toBe(true);
   expect(motionWithoutRotation(motions)?.postMoveSteps).toBeUndefined();
+  expect(
+    motionWithoutRotation([
+      { type: "motion", from: 21, to: 30, postMoveSteps: 1 },
+    ]),
+  ).toBeUndefined();
+});
+
+test("board-directed facing is restricted to a staged Shield", () => {
+  const staging = {
+    from: 31,
+    to: 40,
+    motions: [
+      { type: "motion", from: 31, to: 40 },
+      { type: "motion", from: 31, to: 40, postMoveSteps: 2 },
+    ],
+  } satisfies import("./interaction").ShieldStaging;
+  const multiFinPieces: Piece[] = [
+    {
+      id: "green:commander",
+      color: "green",
+      controller: "green",
+      kind: "commander",
+      rot: 0,
+    },
+    {
+      id: "green:probeH1",
+      color: "green",
+      controller: "green",
+      kind: "probe",
+      variant: "heavy",
+      rot: 0,
+    },
+    {
+      id: "green:lanceH1",
+      color: "green",
+      controller: "green",
+      kind: "lance",
+      variant: "heavy",
+      rot: 0,
+    },
+  ];
+
+  for (const piece of multiFinPieces) {
+    expect(stagedShieldRotationSteps(staging, 41, piece)).toBeNull();
+  }
+
+  const shield: Piece = {
+    id: "green:shield1",
+    color: "green",
+    controller: "green",
+    kind: "shield",
+    rot: 0,
+  };
+  expect(stagedShieldRotationSteps(null, 41, shield)).toBeNull();
+  expect(stagedShieldRotationSteps(staging, 49, shield)).toBe(0);
+  expect(stagedShieldRotationSteps(staging, 41, shield)).toBe(2);
 });
 
 test("worldToSquare snaps nearby pointers onto the 9x9 graph", () => {

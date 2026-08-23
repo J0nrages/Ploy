@@ -82,7 +82,23 @@ export function shouldStageShield(
 export function motionWithoutRotation(
   motions: Extract<Move, { type: "motion" }>[],
 ): Extract<Move, { type: "motion" }> | undefined {
-  return motions.find((move) => move.postMoveSteps === undefined) ?? motions[0];
+  return motions.find((move) => move.postMoveSteps === undefined);
+}
+
+export function stagedShieldRotationSteps(
+  staging: ShieldStaging | null,
+  hovered: Square | null,
+  piece: Piece | null,
+): 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | null {
+  if (
+    !staging ||
+    hovered === null ||
+    piece?.kind !== "shield" ||
+    !inFacingHoverRange(staging.to, hovered, piece)
+  ) {
+    return null;
+  }
+  return rotationStepsToward(staging.to, hovered, piece.rot);
 }
 
 export type BoardInteraction = {
@@ -154,8 +170,11 @@ export function useBoardInteraction(args: {
         setStaging({ from: motions[0].from, to: square, motions });
         return;
       }
-      args.onCommit(motions[0]);
-      cancel();
+      const motion = motionWithoutRotation(motions);
+      if (motion) {
+        args.onCommit(motion);
+        cancel();
+      }
       return;
     }
     if (!isSelectablePiece(args.snapshot, args.actingColor, square)) {
