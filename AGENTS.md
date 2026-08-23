@@ -13,11 +13,12 @@ The scan wins on rules. The execution plan wins on product scope, architecture, 
 
 ## Execution
 
-- Begin with the next eligible work order whose dependencies have passed. Waves 0–1B are in place; finish the board, online rooms, and acceptance gates.
+- Begin with the next eligible work order whose dependencies have passed. The public repository owns the rules, AI, board, local web play, and desktop acceptance gates.
 - Follow each work order's allowed paths and gate. Do not begin downstream waves early.
 - Only the integrator edits root manifests, workspace configuration, shared TypeScript configuration, or lockfiles.
 - Treat `docs/implementation/ploy-remaster-execution.md` as the only editable plan. `.cursor/plans/ploy_remaster_agents_05627304.plan.md` is a pointer for tool discovery.
 - Stop and report a failed mandatory gate. Never create a second rules engine as a workaround.
+- Hosted online play is implemented only in the private downstream repository. Public changes must not add its backend, bearer data, deployment configuration, or tests.
 - Do not run a production deployment or publish changes unless the user explicitly asks.
 
 ## Completion

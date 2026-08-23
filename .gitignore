@@ -5,7 +5,6 @@ node_modules/
 .env
 .env.local
 .venv/
-.convex/
 
 # Build outputs
 dist/
@@ -32,7 +31,6 @@ __pycache__/
 Thumbs.db
 *.swp
 
-# Do not ignore bun.lock or committed WASM copies:
+# Do not ignore bun.lock or the committed WASM artifact:
 # packages/rules/wasm/ploy_core.wasm
-# convex/generated/ploy_core.wasm
 .vercel

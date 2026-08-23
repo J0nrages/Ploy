@@ -16,17 +16,11 @@ function run(command: string, args: string[], env: NodeJS.ProcessEnv = {}): stri
 }
 
 const rulesPath = "packages/rules/wasm/ploy_core.wasm";
-const convexPath = "convex/generated/ploy_core.wasm";
 
 run("bun", ["run", "build:wasm"]);
 
 const rulesBytes = readFileSync(rulesPath);
-const convexBytes = readFileSync(convexPath);
 const rulesHash = createHash("sha256").update(rulesBytes).digest("hex");
-const convexHash = createHash("sha256").update(convexBytes).digest("hex");
-if (rulesHash !== convexHash) {
-  throw new Error("copied WASM SHA-256 hashes differ");
-}
 
 const module = await WebAssembly.compile(rulesBytes);
 if (WebAssembly.Module.imports(module).length !== 0) {
@@ -58,7 +52,7 @@ const notes = `# WASM spike
 - Tensi-style search completed depth ${search.depth}: ${search.nodes} nodes in ${elapsedMs.toFixed(2)} ms
 - nodes/second: ${nodesPerSecond}
 
-Worker and Convex hosts apply the same Green e3-e4 shield motion and must return this exact JSON payload:
+The browser Worker applies the Green e3-e4 shield motion and must return this exact JSON payload:
 
 \`\`\`json
 ${fixtureJson}

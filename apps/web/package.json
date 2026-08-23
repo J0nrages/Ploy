@@ -14,7 +14,6 @@
     "@ploy/ai": "workspace:*",
     "@ploy/rules": "workspace:*",
     "@ploy/ui-board": "workspace:*",
-    "convex": "^1.27.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "three": "^0.182.0"

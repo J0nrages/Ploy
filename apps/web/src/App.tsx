@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { initializeRules } from "@ploy/rules";
 import { LocalPlay } from "./LocalPlay";
-import { OnlinePlay } from "./OnlinePlay";
 import { RulesHelp } from "./RulesHelp";
 
-type Screen = "menu" | "local" | "online" | "rules";
+type Screen = "menu" | "local" | "rules";
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL;
+const OFFICIAL_ONLINE_URL = "https://jonathanrdaniels.com/ploy";
 
 export function App() {
   const [ready, setReady] = useState(false);
@@ -34,21 +33,6 @@ export function App() {
     return <LocalPlay onBack={() => setScreen("menu")} />;
   }
 
-  if (screen === "online") {
-    if (!convexUrl) {
-      return (
-        <main className="hud menu">
-          <button type="button" className="ghost" onClick={() => setScreen("menu")}>
-            ← Main menu
-          </button>
-          <h1>Online room</h1>
-          <p>Set VITE_CONVEX_URL to open a live anonymous table. Local play stays available offline.</p>
-        </main>
-      );
-    }
-    return <OnlinePlay onBack={() => setScreen("menu")} />;
-  }
-
   if (screen === "rules") {
     return (
       <main className="hud menu">
@@ -73,9 +57,13 @@ export function App() {
           <strong>Play locally</strong>
           <span>Start a new game or resume an auto-save</span>
         </button>
-        <button type="button" className="menu-action" onClick={() => setScreen("online")}>
+        <button
+          type="button"
+          className="menu-action"
+          onClick={() => window.location.assign(OFFICIAL_ONLINE_URL)}
+        >
           <strong>Play online</strong>
-          <span>Create or join an anonymous room</span>
+          <span>Open the official hosted game</span>
         </button>
         <button type="button" className="menu-action" onClick={() => setScreen("rules")}>
           <strong>How to play</strong>

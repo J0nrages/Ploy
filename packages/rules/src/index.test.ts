@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
@@ -13,7 +12,6 @@ import {
 import { wrapInstance } from "./runtime";
 
 const RULES_WASM = new URL("../wasm/ploy_core.wasm", import.meta.url);
-const CONVEX_WASM = new URL("../../../convex/generated/ploy_core.wasm", import.meta.url);
 
 test("RulesError is constructible", () => {
   const error = new RulesError("rulesNotInitialized");
@@ -38,12 +36,8 @@ test("WASM-backed calls throw before initializeRules", () => {
   expect(isolated.status).toBe(0);
 });
 
-test("compiled module imports nothing and both copies share a SHA-256", () => {
+test("compiled module imports nothing", () => {
   const rulesBytes = readFileSync(RULES_WASM);
-  const convexBytes = readFileSync(CONVEX_WASM);
-  const rulesHash = createHash("sha256").update(rulesBytes).digest("hex");
-  const convexHash = createHash("sha256").update(convexBytes).digest("hex");
-  expect(rulesHash).toBe(convexHash);
   const module = new WebAssembly.Module(rulesBytes);
   expect(WebAssembly.Module.imports(module)).toEqual([]);
 });

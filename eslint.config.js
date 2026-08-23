@@ -9,7 +9,6 @@ export default tseslint.config(
       "**/dist/**",
       "**/build/**",
       "target/**",
-      "convex/_generated/**",
       "**/*.tsbuildinfo",
     ],
   },

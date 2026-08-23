@@ -1,48 +1,25 @@
 # Ploy
 
-### A 1970 space-age strategy game, brought back to life.
+### A 1970 space-age strategy game, brought back to life
 
-I found an old copy of **Ploy** in my grandpa's basement. Its directional pieces, geometric board, and wonderfully optimistic 1970s design immediately caught my attention.
+Ploy is an offline-first remaster of the 1970 3M bookshelf game. It preserves the printed rules while rebuilding the board, local multiplayer, and computer opponent for the web and a Tauri desktop shell.
 
-What started as curiosity about an old gem became a fascination with how much strategy was hidden inside such a simple physical system. Every piece carries its possible directions directly on its face. Moving, rotating, blocking, and capturing all emerge from that one elegant idea.
-
-This remaster is an effort to make Ploy easier and more fun to play online, while introducing the game to a new generation of players. It preserves the original 1970 rules and rebuilds the experience as a responsive, open-source web and desktop game.
-
-One Rust engine powers the rules and computer opponent everywhere: browser, desktop, and online rooms.
+One Rust engine powers rules and conventional game-tree search. The same no-import WebAssembly module runs in the browser Worker and desktop webview, so the UI never maintains a second rules engine.
 
 **Offline-first · No accounts · No generative AI · MIT licensed**
 
 ![A two-player Ploy game showing directional pieces and legal destinations](docs/images/ploy-gameplay.png)
 
-## Why this remaster?
+## Included here
 
-Ploy has an unusually expressive ruleset: every piece's geometry determines both how it moves and how it controls the board.
-
-This edition combines the original game with a modern implementation:
-
-- All official modes: two-player, four-player free-for-all, and partnership
-- A responsive computer opponent with four strengths and five playing styles
-- One authoritative Rust/WASM rules engine across every surface
-- A 2.5D path-vertex board inspired by the original space-age design
-- Local saves, undo, hotseat play, and keyboard interaction
-- Anonymous Convex rooms without accounts
+- Two-player, four-player free-for-all, and partnership modes
+- Local hotseat play with auto-save and undo
+- Four computer strengths and five playing styles
+- Experimental adaptive local difficulty
+- A responsive 2.5D board with pointer and keyboard controls
 - An optional Tauri 2 desktop shell
 
-The computer opponent is conventional game-tree search—not an LLM, neural network, or hosted model. It runs locally in a Web Worker and does not block the board.
-
-## Project status
-
-| Surface | Status |
-| --- | --- |
-| Local web play | Playable and tested |
-| Two-player computer opponent | Playable: four strengths, five styles, and experimental local adaptation |
-| Four-player and partnership | Playable locally |
-| Anonymous online rooms | Implemented; requires a Convex development environment |
-| Online computer seat | Implemented with host-controlled mid-game profiles, client lease, and failover |
-| Tauri desktop | Scaffolded; requires platform-specific Tauri libraries |
-| Production deployment | Not currently provided |
-
-The rules, WASM boundary, computer search, and web production build pass the repository test suite. Live Convex and packaged desktop releases still need platform-level release validation.
+The hosted multiplayer service is maintained in a private downstream repository. The public app’s **Play online** entry opens the unified official game at [jonathanrdaniels.com/ploy](https://jonathanrdaniels.com/ploy) in the same tab. This repository contains no hosted backend, online client implementation, deployment credentials, or private service tests. See [ADR 0003](docs/adr/0003-open-core-hosted-online-boundary.md).
 
 ## Quick start
 
@@ -64,7 +41,7 @@ bun run build:wasm
 bun run dev
 ```
 
-Open the Vite URL printed in the terminal. Local games and the computer opponent do not require Convex or an internet connection.
+Local play and the computer opponent require no environment variables, hosted service, account, or internet connection.
 
 ## How Ploy works
 
@@ -73,66 +50,30 @@ Every piece carries one or more directional indicators. On a turn, choose one ac
 1. Move a piece along one of its indicated straight paths.
 2. Rotate a piece by a multiple of 45°.
 
-Lances move up to three spaces, Probes up to two, and Commanders and Shields one. Pieces block movement, and an opposing piece is captured by landing on its position.
+Lances move up to three spaces, Probes up to two, and Commanders and Shields one. Pieces block movement, and an opposing piece is captured by landing on its position. A Shield may also rotate after moving.
 
-Two-player armies begin with 15 pieces per color. Four-player free-for-all and partnership armies begin with 9 pieces per color.
-
-Shields are special: after moving, a Shield may also rotate as part of the same turn.
-
-A player is defeated when their Commander is captured or they lose all their Lances, Probes, and Shields. Free-for-all and partnership games apply the continuation and takeover rules printed in the original 1970 instructions.
-
-The in-game rules panel explains piece geometry and controls during play.
+Two-player armies begin with 15 pieces per color. Four-player free-for-all and partnership armies begin with 9 pieces per color. A player is defeated when their Commander is captured or they lose all their Lances, Probes, and Shields. The original instruction sheet is the sole rules authority.
 
 ## Computer opponent
 
-The opponent runs entirely inside the Rust/WASM core using the same move generator and terminal rules as human play.
-
-It uses:
-
-- Iterative deepening and MTD(f)/alpha-beta search
-- Zobrist position hashing
-- A transposition table
-- Refutation and history move ordering
-- Bounded recapture and Commander-threat extensions
-- Capture quiescence
-- Deterministic node budgets
-
-Strength controls search budget and how much evaluated score loss the opponent is allowed to accept. Style is a separate preference layer that can distinguish strategically close moves without overriding a forced win, avoidable loss, or Commander safety.
+The opponent uses iterative deepening, MTD(f)/alpha-beta search, Zobrist hashing, a transposition table, move ordering, bounded extensions, and capture quiescence. Strength controls the search budget and acceptable score loss; style selects among strategically close moves without overriding forced wins, avoidable losses, or Commander safety.
 
 | Strength | Character |
 | --- | --- |
-| Cadet | Fast and varied; may choose a clearly imperfect scored move |
-| Navigator | Shallow tactical lookahead with modest controlled errors |
-| Commander | Deeper search with only small score concessions |
-| Strategist | Largest search budget and always selects a top-scored move |
+| Cadet | Fast and varied |
+| Navigator | Shallow tactical lookahead |
+| Commander | Deeper search with small concessions |
+| Strategist | Largest budget and top-scored choices |
 
 | Style | Preference |
 | --- | --- |
-| Balanced | Material, mobility, safety, and immediate threats |
-| Aggressor | Sound captures and Commander pressure |
-| Guardian | Commander safety, blocking, and lower-risk positions |
-| Maneuverer | Mobility, central access, and productive reorientation |
-| Trickster | Unusual rotations and threat creation within tactical limits |
+| Balanced | Material, mobility, safety, and threats |
+| Aggressor | Captures and Commander pressure |
+| Guardian | Safety, blocking, and lower risk |
+| Maneuverer | Mobility, access, and reorientation |
+| Trickster | Unusual rotations and threat creation |
 
-Strength and style can be changed during local or online games. The current search is cancelled and restarted locally; online moves include the profile revision used for their search, so the server rejects an obsolete result.
-
-Local computer games also offer **Adaptive strength (Experimental)**. This opt-in mode:
-
-- Reviews the human's actual move with a separate Balanced analysis in the same Rust/WASM core
-- Ignores the opening eight plies, forced moves, low-choice positions, incomplete searches, and failed reviews
-- Requires four qualifying samples, changes by at most one strength, and observes a four-move cooldown
-- Stays inside player-selected minimum and maximum strengths and never changes style
-- Rebuilds deterministically after undo and persists with the local save
-
-Adaptive mode is intentionally local-only while its thresholds are calibrated. Online hosts can still change fixed strength and style at any point.
-
-Search runs in a persistent module Worker. Cancellation terminates the active Worker safely, and failed turns can be resumed without applying a partial move. Each game has a seed and each profile change has a revision, making the same position, turn, seed, and revision reproducible while allowing different games to vary.
-
-Development builds expose a hidden diagnostics panel with the seed/revision, completed depth, nodes, elapsed time, full principal variation, score loss, fallback quality, and adaptive evidence/confidence/cooldown. The repeatable release-mode calibration harness swaps colors between adjacent strengths without claiming public ratings:
-
-```bash
-PLOY_CALIBRATION_PLIES=16 cargo run --release -p ploy-core --example calibrate
-```
+Search runs in a persistent module Worker. Cancellation terminates the active Worker safely, and failed turns can resume without applying a partial move.
 
 ## Architecture
 
@@ -144,7 +85,6 @@ flowchart LR
     AI["@ploy/ai<br/>module Worker"]
     Web["Vite / React"]
     Desktop["Tauri 2"]
-    Convex["Convex rooms"]
 
     Core --> Wasm
     Wasm --> Rules
@@ -152,10 +92,7 @@ flowchart LR
     Rules --> Web
     AI --> Web
     Web --> Desktop
-    Wasm --> Convex
 ```
-
-There is one move generator, one terminal evaluator, and one rules implementation. TypeScript handles UI, validation, serialization, and platform adapters; it does not maintain a second game engine.
 
 ```text
 crates/
@@ -164,44 +101,15 @@ crates/
 
 packages/
   rules/           TypeScript facade over WASM
-  ai/              Worker lifecycle, strength budgets, and referee analysis
-  ui-board/        Shared 2.5D board and interaction model
+  ai/              Worker lifecycle and computer profiles
+  ui-board/        Shared board and interaction model
 
 apps/
   web/             Vite and React application
   desktop/         Tauri 2 shell
-
-convex/            Anonymous rooms and authoritative move submission
-docs/              Architecture, implementation contract, and rules sources
 ```
-
-## Online rooms
-
-Local play does not construct a Convex client unless `VITE_CONVEX_URL` is configured.
-
-To start an anonymous Convex development environment:
-
-```bash
-CONVEX_AGENT_MODE=anonymous bun x convex dev
-```
-
-Add the resulting URL to `.env.local`:
-
-```dotenv
-VITE_CONVEX_URL=your-development-url
-```
-
-Online games use six-character room codes and anonymous session identifiers. Convex validates and applies moves through the same WASM rules artifact.
-
-Computer search never runs inside Convex. A participating browser owns a renewable lease for the computer seat and submits its selected move through the normal authoritative path. Another participant can take over if that client disappears.
-
-Only the room host may change the computer's strength or style. A change increments the public profile revision and applies to the next computer decision; an in-flight result calculated under an older revision cannot be submitted as current.
-
-Do not run a production Convex deployment unless you intend to publish one.
 
 ## Desktop
-
-The Tauri shell uses the same web application, Worker, and WASM engine. It does not introduce native rule or search commands.
 
 Install the appropriate [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/) before running:
 
@@ -210,12 +118,9 @@ bun run build:wasm
 bun run dev:desktop
 ```
 
-On Debian or Ubuntu, development requires packages including `pkg-config`, `libdbus-1-dev`, and WebKitGTK development libraries.
-
-## Development
+## Development and acceptance
 
 ```bash
-bun run build:wasm
 bun run wasm-gate
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
@@ -225,15 +130,9 @@ bun run lint
 bun run typecheck
 bun run --filter web build
 cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
-CONVEX_AGENT_MODE=anonymous bun x convex dev --once
 ```
 
-The WASM gate verifies that:
-
-- The compiled module has no host imports
-- Browser Worker and Convex adapters use identical WASM bytes
-- Canonical fixture output is byte-identical
-- The search engine executes inside WASM
+The WASM gate compiles the release artifact, verifies that it has no host imports, executes the canonical move fixture, and runs search inside the module.
 
 Architecture and implementation contracts live in:
 
@@ -242,23 +141,15 @@ Architecture and implementation contracts live in:
 - [`docs/implementation/ploy-remaster-execution.md`](docs/implementation/ploy-remaster-execution.md)
 - [`docs/adr/0001-single-rules-core.md`](docs/adr/0001-single-rules-core.md)
 - [`docs/adr/0002-deterministic-opponent-profiles.md`](docs/adr/0002-deterministic-opponent-profiles.md)
-- [`docs/implementation/ai-opponent-calibration.md`](docs/implementation/ai-opponent-calibration.md)
+- [`docs/adr/0003-open-core-hosted-online-boundary.md`](docs/adr/0003-open-core-hosted-online-boundary.md)
 
-## Rules authority
+## Rules authority and credits
 
 The original 1970 3M instruction sheet is the sole authority for rules and setup:
 
 [`Instructions - Ploy (1970 - 3M Games).png`](Instructions%20-%20Ploy%20(1970%20-%203M%20Games).png)
 
-Secondary references do not override the printed instructions.
-
-## Credits
-
-Ploy was published by 3M Games in 1970.
-
-The computer opponent is an original Rust/WASM adaptation of the search architecture documented in [Dr. Thomas Tensi's MIT-licensed Ada Ploy engine](https://tensi.eu/thomas/programming/games/ploy/ploy.html). The upstream license is preserved in [`crates/ploy-core/TENSI-LICENSE`](crates/ploy-core/TENSI-LICENSE).
-
-This remaster uses the 1970 3M rules rather than the later partnership variants implemented by Tensi.
+Ploy was published by 3M Games in 1970. The computer opponent is an original Rust/WASM adaptation of the search architecture documented in [Dr. Thomas Tensi's MIT-licensed Ada Ploy engine](https://tensi.eu/thomas/programming/games/ploy/ploy.html). The upstream license is preserved in [`crates/ploy-core/TENSI-LICENSE`](crates/ploy-core/TENSI-LICENSE).
 
 ## License
 
