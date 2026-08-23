@@ -23,13 +23,6 @@ const FIN_WIDTH = 0.16;
 const FIN_TAPER = 0.5;
 const PIECE_SCALE = 0.4;
 
-const MOLDED_COLORS: Record<Piece["color"], number> = {
-  green: 0x2ea44f,
-  coral: 0xd23b16,
-  blue: 0x4da7c8,
-  yellow: 0xd8d32c,
-};
-
 /*
  * Approved molded-piece build from ploy-pieces.html. The body and blade
  * geometry are shared by every piece; the rules-owned direction mask decides
@@ -38,10 +31,10 @@ const MOLDED_COLORS: Record<Piece["color"], number> = {
 const BODY_GEOMETRY = createBodyGeometry();
 const FIN_GEOMETRY = createFinGeometry();
 const PIECE_MATERIALS: Record<Piece["color"], MeshPhysicalMaterial> = {
-  green: createPieceMaterial(MOLDED_COLORS.green),
-  coral: createPieceMaterial(MOLDED_COLORS.coral),
-  blue: createPieceMaterial(MOLDED_COLORS.blue),
-  yellow: createPieceMaterial(MOLDED_COLORS.yellow),
+  green: createPieceMaterial(0x2ea44f),
+  coral: createPieceMaterial(0xd23b16),
+  blue: createPieceMaterial(0x4da7c8),
+  yellow: createPieceMaterial(0xd8d32c),
 };
 
 function createPieceMaterial(color: number): MeshPhysicalMaterial {
@@ -104,7 +97,10 @@ function createFinGeometry(): ExtrudeGeometry {
   });
   geometry.translate(0, 0, -coreWidth / 2);
 
-  const positions = geometry.attributes.position;
+  const positions = geometry.getAttribute("position");
+  if (!(positions instanceof BufferAttribute)) {
+    throw new Error("Piece fin geometry requires a position buffer");
+  }
   for (let index = 0; index < positions.count; index += 1) {
     const taper =
       FIN_TAPER +
@@ -120,7 +116,10 @@ function createFinGeometry(): ExtrudeGeometry {
 
 function smoothNormals(geometry: ExtrudeGeometry, angleDegrees: number): void {
   const threshold = Math.cos((angleDegrees * Math.PI) / 180);
-  const positions = geometry.attributes.position;
+  const positions = geometry.getAttribute("position");
+  if (!(positions instanceof BufferAttribute)) {
+    throw new Error("Piece fin geometry requires a position buffer");
+  }
   const faceNormals: Vector3[] = [];
   const capFaces: boolean[] = [];
   const facesByVertex = new Map<string, number[]>();
